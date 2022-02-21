@@ -1,0 +1,11 @@
+prefix=C:/Program Files (x86)/QuaZip
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: QuaZip-Qt6
+Description: Minizip wrapper library for Qt 6.x
+Version: 1.2
+Libs: -lquazip1-qt6
+Cflags: -I${includedir}/QuaZip-Qt6-1.2 -I${includedir}/QuaZip-Qt6-1.2/quazip
+Requires: zlib, Qt6Core
