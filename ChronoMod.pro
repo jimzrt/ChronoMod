@@ -12,6 +12,7 @@ DEFINES += QUAZIP_STATIC
 RC_ICONS = myappico.ico
 
 SOURCES += \
+    ChronoCrypto.cpp \
     main.cpp \
     mainwindow.cpp \
     resourcebin.cpp \
@@ -19,6 +20,7 @@ SOURCES += \
     resourceentryproxymodel.cpp
 
 HEADERS += \
+    ChronoCrypto.h \
     Patch.h \
     WorkerThread.h \
     mainwindow.h \

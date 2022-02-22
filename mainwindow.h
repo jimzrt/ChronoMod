@@ -43,6 +43,7 @@ private slots:
 
 private:
     Ui::MainWindow* ui;
+    std::vector<uint32_t> decryption_key;
     //std::vector<RessourceBinHeaderEntry> entry_list;
     std::shared_ptr<ResourceBin> ressourceBin;
     void extract_entries(const std::vector<ResourceEntry>& entries);
@@ -51,5 +52,6 @@ private:
     std::unordered_map<std::string, Patch> patchMap;
     QTemporaryDir tempDir;
     void loadRessourceBin(const QString& filepath);
+    void hidePreviews();
 };
 #endif // MAINWINDOW_H

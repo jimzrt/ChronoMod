@@ -370,38 +370,38 @@ void ResourceBin::create_with_modifications(std::unordered_map<std::string, Patc
     int new_header_offset = out_stream.tellp();
 
     //size of uncompressed header stays the same
-    std::vector<char> new_header(uncompressed_length_header + 4);
+    //std::vector<char> new_header(uncompressed_length_header + 4);
 
     int offset = 4;
     uint32_t new_entry_count = new_entries.size();
-    memcpy(new_header.data() + offset, &new_entry_count, 4);
+    memcpy(buffer.data() + offset, &new_entry_count, 4);
     offset += 4;
     for (auto& entry : new_entries) {
-        memcpy(new_header.data() + offset, &entry.path_name_offset, 4);
+        memcpy(buffer.data() + offset, &entry.path_name_offset, 4);
         offset += 4;
-        memcpy(new_header.data() + offset, &entry.entry_offset, 4);
+        memcpy(buffer.data() + offset, &entry.entry_offset, 4);
         offset += 4;
-        memcpy(new_header.data() + offset, &entry.entry_length, 4);
+        memcpy(buffer.data() + offset, &entry.entry_length, 4);
         offset += 4;
     }
     for (auto& entry : new_entries) {
         // including \0 terminator
         int path_length = entry.path.length() + 1;
-        memcpy(new_header.data() + offset, entry.path.c_str(), path_length);
+        memcpy(buffer.data() + offset, entry.path.c_str(), path_length);
         offset += path_length;
     }
-    std::vector<char> tmp(compressBound(new_header.size() * 1.5));
+    //std::vector<char> tmp(compressBound(new_header.size() * 1.5));
     int32_t uncompressed_length_header_swapped = _byteswap_ulong(uncompressed_length_header);
-    memcpy(tmp.data(), &uncompressed_length_header_swapped, 4);
-    int compressed_length = tmp.size();
-    int ret = gzip_compress(new_header.data() + 4, new_header.size() - 4, tmp.data() + 4, &compressed_length);
+    memcpy(buffer.data(), &uncompressed_length_header_swapped, 4);
+    unsigned int compressed_length = buffer.size();
+    int ret = gzip_compress_inplace((unsigned char*)buffer.data() + 4, uncompressed_length_header, &compressed_length);
     assert(ret == 0);
-    new_header = std::move(tmp);
+    //new_header = std::move(tmp);
 
     // add first 4 bytes
     compressed_length += 4;
-    decode(new_header_offset, compressed_length, new_header.data());
-    out_stream.write(new_header.data(), compressed_length);
+    decode(new_header_offset, compressed_length, buffer.data());
+    out_stream.write(buffer.data(), compressed_length);
     int file_end = out_stream.tellp();
 
     char header_buffer[16];

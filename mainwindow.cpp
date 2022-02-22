@@ -6,21 +6,22 @@
 #include "resourceentrymodel.h"
 #include "resourceentryproxymodel.h"
 #include "ui_mainwindow.h"
+#include <ChronoCrypto.h>
 #include <JlCompress.h>
 #include <QDirIterator>
 #include <QFileDialog>
+#include <QFontDatabase>
 #include <QMessageBox>
 #include <QPainter>
 #include <QSortFilterProxyModel>
+#include <QTreeWidget>
 
 // todo
 // check patch valid
 // delete and rename not in loop
 // ressource bin - graceful on close
-// font extension (maybe renderer?)
 // status messages background job
 // stop background job
-// ui reset
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -40,10 +41,8 @@ MainWindow::MainWindow(QWidget* parent)
 
     // setup ui and models
     ui->setupUi(this);
+    hidePreviews();
     ui->progressBar->setHidden(true);
-    ui->imagePreview->setHidden(true);
-    ui->imagePreview2->setHidden(true);
-    ui->plainTextEdit->setHidden(true);
 
     QMenu* tableViewMenu = new QMenu(this);
 
@@ -77,6 +76,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     // ressource.bin loaded - populate table
     connect(this, &MainWindow::ressourceBin_loaded, this, [=]() {
+        ui->tableView->selectionModel()->clearSelection();
         ui->actionExtract_All->setEnabled(true);
         ui->actionLoad_Patch->setEnabled(true);
         ui->lineEdit->setEnabled(true);
@@ -98,15 +98,12 @@ MainWindow::MainWindow(QWidget* parent)
         auto selected_rows = ui->tableView->selectionModel()->selectedRows();
 
         if (selected_rows.empty()) {
-            ui->plainTextEdit->hide();
-            ui->imagePreview->hide();
-            ui->imagePreview2->hide();
+            hidePreviews();
             return;
         }
 
         if (selected_rows.size() != 1) {
-            ui->plainTextEdit->hide();
-            ui->imagePreview2->hide();
+            hidePreviews();
             ui->imagePreview->setText(QString("%1 files selected").arg(selected_rows.size()));
             ui->imagePreview->show();
             return;
@@ -117,20 +114,19 @@ MainWindow::MainWindow(QWidget* parent)
         auto fileName = QString::fromStdString(entry.path);
         if (fileName.endsWith(".txt")) {
             auto data = this->ressourceBin->extract(entry);
-            ui->imagePreview->hide();
-            ui->imagePreview2->hide();
+            hidePreviews();
             ui->plainTextEdit->setPlainText(QString::fromUtf8(data.data(), data.size()));
             ui->plainTextEdit->show();
             return;
         }
+
         if (fileName.endsWith(".png") || fileName.endsWith(".bmp")) {
             bool png = fileName.endsWith(".png");
             auto data = this->ressourceBin->extract(entry);
             QPixmap image;
             image.loadFromData((const unsigned char*)data.data(), data.size(), png ? "PNG" : "BMP");
             image = image.scaled(250, 250, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-            ui->plainTextEdit->hide();
-            ui->imagePreview2->hide();
+            hidePreviews();
             ui->imagePreview->setPixmap(image);
             ui->imagePreview->show();
             if (entry.hasReplacement) {
@@ -148,8 +144,45 @@ MainWindow::MainWindow(QWidget* parent)
             return;
         }
 
-        ui->plainTextEdit->hide();
-        ui->imagePreview2->hide();
+        if (fileName.startsWith("string_")) {
+            auto data = this->ressourceBin->extract(entry);
+            auto decrypted = decrypt_file_with_key(decryption_key.data(), data.data(), data.size());
+            QByteArray byteArray(decrypted.data(), decrypted.size());
+            int font_id = QFontDatabase::addApplicationFontFromData(byteArray);
+            assert(font_id != -1);
+            QStringList font_families = QFontDatabase::applicationFontFamilies(font_id);
+            qDebug() << font_families;
+
+            QFont newFont(font_families[0], 14);
+            hidePreviews();
+            ui->fontPreview->setFont(newFont);
+            QString previewText = "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.";
+            ui->fontPreview->setText(previewText);
+            ui->fontPreview->show();
+
+            if (entry.hasReplacement) {
+                qDebug() << "has replacement!";
+                Patch& patch = this->patchMap[entry.path];
+                QFile patchFile(QString::fromStdString(patch.path));
+                patchFile.open(QFile::ReadOnly);
+                QByteArray fileByteArray = patchFile.readAll();
+                auto decrypted = decrypt_file_with_key(decryption_key.data(), fileByteArray.data(), patchFile.size());
+                patchFile.close();
+                QByteArray byteArray(decrypted.data(), decrypted.size());
+                int font_id = QFontDatabase::addApplicationFontFromData(byteArray);
+                assert(font_id != -1);
+                QStringList font_families = QFontDatabase::applicationFontFamilies(font_id);
+                qDebug() << font_families;
+
+                QFont newFont(font_families[0], 14);
+                ui->fontPreview2->setFont(newFont);
+                ui->fontPreview2->setText(previewText);
+                ui->fontPreview2->show();
+            }
+            return;
+        }
+
+        hidePreviews();
         ui->imagePreview->setText("No preview");
         ui->imagePreview->show();
         return;
@@ -189,6 +222,23 @@ MainWindow::MainWindow(QWidget* parent)
                 }
 
                 auto& entry = this->ressourceBin->getEntries()[entry_index];
+                // encryt string files
+                if (QString::fromStdString(entry.path).startsWith("string_")) {
+
+                    QFile patchFile(fileName);
+                    std::vector<char> patchBuffer(patchFile.size());
+                    patchFile.open(QIODevice::ReadOnly);
+                    patchFile.read(patchBuffer.data(), patchBuffer.size());
+                    patchFile.close();
+                    auto encrypted = encrypt_file_with_key(decryption_key.data(), patchBuffer.data(), patchBuffer.size());
+
+                    QString finalPath = QDir(tempDir.path()).filePath(QString::fromStdString(entry.path));
+                    QFile decryptedPatchFile(finalPath);
+                    decryptedPatchFile.open(QFile::WriteOnly);
+                    decryptedPatchFile.write(encrypted.data(), encrypted.size());
+                    decryptedPatchFile.close();
+                    fileName = finalPath;
+                }
                 Patch patch(fileName.toStdString());
                 entry.hasReplacement = true;
                 this->patchMap[entry.path] = patch;
@@ -231,6 +281,15 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::hidePreviews()
+{
+    ui->plainTextEdit->hide();
+    ui->imagePreview->hide();
+    ui->imagePreview2->hide();
+    ui->fontPreview->hide();
+    ui->fontPreview2->hide();
+}
+
 void MainWindow::loadRessourceBin(const QString& filepath)
 {
     try {
@@ -247,6 +306,21 @@ void MainWindow::loadRessourceBin(const QString& filepath)
 
 void MainWindow::on_actionOpen_Archive_triggered()
 {
+
+    QString chronoFileName = QFileDialog::getOpenFileName(this, "Open Chrono Trigger.exe...", "F:\\SteamLibrary\\steamapps\\common\\Chrono Trigger", "Exe files (*.exe);;All files (*)");
+    qDebug() << chronoFileName;
+    if (chronoFileName.isEmpty()) {
+        return;
+    }
+
+    QFile chronoFile(chronoFileName);
+    std::vector<char> chronoBuffer(chronoFile.size());
+    chronoFile.open(QIODevice::ReadOnly);
+    chronoFile.read(chronoBuffer.data(), chronoBuffer.size());
+    chronoFile.close();
+
+    decryption_key = get_key(chronoBuffer.data());
+
     QString fileName = QFileDialog::getOpenFileName(this, "Open Ressource.bin...", "C:\\Users\\james\\Downloads\\chrono_trigger", "BIN files (*.bin);;All files (*)");
     qDebug() << fileName;
     if (fileName.isEmpty()) {
@@ -292,6 +366,12 @@ void MainWindow::extract_entries(const std::vector<ResourceEntry>& entries)
                 }
 
                 auto ret = this->ressourceBin->extract(entry);
+
+                // decrypt string files
+                if (QString::fromStdString(entry.path).startsWith("string_")) {
+                    auto decrypted = decrypt_file_with_key(decryption_key.data(), ret.data(), ret.size());
+                    ret = std::move(decrypted);
+                }
                 QFile file(finalPath);
                 file.open(QIODevice::WriteOnly);
                 file.write(ret.data(), ret.size());
@@ -310,6 +390,12 @@ void MainWindow::extract_entries(const std::vector<ResourceEntry>& entries)
         return;
     }
     auto ret = this->ressourceBin->extract(entries[0]);
+
+    // decrypt string files
+    if (QString::fromStdString(entries[0].path).startsWith("string_")) {
+        auto decrypted = decrypt_file_with_key(decryption_key.data(), ret.data(), ret.size());
+        ret = std::move(decrypted);
+    }
     QFile file(saveName);
     file.open(QIODevice::WriteOnly);
     file.write(ret.data(), ret.size());
