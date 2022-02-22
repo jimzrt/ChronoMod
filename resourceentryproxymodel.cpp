@@ -13,7 +13,7 @@ void ResourceEntryProxyModel::setCurrentSearchString(const QString& searchString
         return;
     }
     currentSearchString = searchString;
-    invalidateFilter();
+    invalidate();
 }
 
 void ResourceEntryProxyModel::setOnlyModified(int state)
@@ -22,7 +22,7 @@ void ResourceEntryProxyModel::setOnlyModified(int state)
         return;
     }
     onlyModified = state;
-    invalidateFilter();
+    invalidate();
 }
 
 bool ResourceEntryProxyModel::filterAcceptsRow(int source_row, const QModelIndex& source_parent) const

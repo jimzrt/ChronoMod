@@ -1,5 +1,6 @@
 #include "resourceentrymodel.h"
 
+#include <QColor>
 #include <QFont>
 
 ResourceEntryModel::ResourceEntryModel(QObject* parent)
@@ -95,6 +96,14 @@ QVariant ResourceEntryModel::data(const QModelIndex& index, int role) const
         const auto& entry = ressource_entry_list->at(index.row());
         return entry.entry_length;
     }
+
+    //    if (role == Qt::DecorationRole && index.column() == 2) {
+    //        const auto& entry = ressource_entry_list->at(index.row());
+    //        if (entry.hasReplacement) {
+    //            return QColorConstants::Cyan;
+    //        }
+    //        return {};
+    //    }
 
     if (role == Qt::TextAlignmentRole) {
         return { Qt::AlignLeft | Qt::AlignVCenter };

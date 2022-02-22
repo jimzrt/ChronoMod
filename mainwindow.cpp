@@ -22,10 +22,12 @@
 // ressource bin - graceful on close
 // status messages background job
 // stop background job
+// filtered count / modified count
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , settings("ChronoMod")
 {
 
     // apply dark theme
@@ -49,34 +51,47 @@ MainWindow::MainWindow(QWidget* parent)
     ResourceEntryModel* model = new ResourceEntryModel(this);
     ResourceEntryProxyModel* proxyModel = new ResourceEntryProxyModel(this);
     proxyModel->setSourceModel(model);
-    ui->tableView->setModel(proxyModel);
-    ui->tableView->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+
+    ui->treeView->setModel(proxyModel);
+    ui->treeView->header()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 
     // filter entries
     connect(ui->lineEdit, &QLineEdit::textChanged, proxyModel, &ResourceEntryProxyModel::setCurrentSearchString);
-    connect(ui->lineEdit, &QLineEdit::textChanged, ui->tableView->selectionModel(), &QItemSelectionModel::clear);
     connect(ui->checkBox, &QCheckBox::stateChanged, proxyModel, &ResourceEntryProxyModel::setOnlyModified);
-    connect(ui->checkBox, &QCheckBox::stateChanged, ui->tableView->selectionModel(), &QItemSelectionModel::clear);
+    connect(proxyModel, &ResourceEntryProxyModel::layoutChanged, this, [=]() {
+        qDebug() << "layout changed!";
+
+        refreshSelection();
+        if (!ui->treeView->selectionModel()->selectedIndexes().empty()) {
+            ui->treeView->scrollTo(ui->treeView->selectionModel()->selectedIndexes()[0]);
+        }
+        ui->statusbar->showMessage(QString("%1 of %2 entries").arg(proxyModel->rowCount()).arg(model->rowCount()));
+    });
 
     // worker thread for extracting
     connect(&this->workerThread, &WorkerThread::started, ui->progressBar, &QProgressBar::show);
     connect(&this->workerThread, &WorkerThread::progressRangeChanged, ui->progressBar, &QProgressBar::setRange);
     connect(&this->workerThread, &WorkerThread::progressValueChanged, ui->progressBar, &QProgressBar::setValue);
     connect(&this->workerThread, &WorkerThread::finished, ui->progressBar, &QProgressBar::hide);
-    connect(this, &MainWindow::patchLoaded, this, [=]() {
+    connect(this, &MainWindow::patchLoaded, this, [=](PatchLoaded patchType) {
         this->ui->actionSave->setEnabled(true);
-        this->ui->lineEdit->setText("");
-        this->ui->checkBox->setChecked(true);
+
+        if (patchType == PatchLoaded::FromPatch) {
+            this->ui->checkBox->setChecked(true);
+            this->ui->lineEdit->setText("");
+        }
+        proxyModel->invalidate();
+        refreshSelection();
     });
     connect(this, &MainWindow::modificationUnset, this, [=]() {
         this->ui->actionSave->setEnabled(!this->patchMap.empty());
-        ui->tableView->selectionModel()->clear();
-        this->ui->checkBox->setChecked(false);
+        proxyModel->invalidate();
+        refreshSelection();
     });
 
     // ressource.bin loaded - populate table
     connect(this, &MainWindow::ressourceBin_loaded, this, [=]() {
-        ui->tableView->selectionModel()->clearSelection();
+        ui->treeView->selectionModel()->clearSelection();
         ui->actionExtract_All->setEnabled(true);
         ui->actionLoad_Patch->setEnabled(true);
         ui->lineEdit->setEnabled(true);
@@ -88,15 +103,13 @@ MainWindow::MainWindow(QWidget* parent)
         this->ui->actionSave->setEnabled(false);
         auto& entrty_list = this->ressourceBin->getEntries();
         model->setModelData(&entrty_list);
-        ui->tableView->sortByColumn(0, Qt::AscendingOrder);
-        ui->statusbar->showMessage(QString("Loaded %1 files").arg(entrty_list.size()));
+        ui->treeView->sortByColumn(0, Qt::AscendingOrder);
         this->setWindowTitle(QString("ChronoMod - %1").arg(QString::fromStdString(this->ressourceBin->get_path())));
     });
 
     // preview selected  entry
-    connect(ui->tableView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [=]() {
-        auto selected_rows = ui->tableView->selectionModel()->selectedRows();
-
+    connect(ui->treeView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [=]() {
+        auto selected_rows = ui->treeView->selectionModel()->selectedRows();
         if (selected_rows.empty()) {
             hidePreviews();
             return;
@@ -189,7 +202,7 @@ MainWindow::MainWindow(QWidget* parent)
     });
 
     auto showContextMenu = [=](const QPoint& clickPosition) {
-        QItemSelectionModel* select = this->ui->tableView->selectionModel();
+        QItemSelectionModel* select = this->ui->treeView->selectionModel();
         if (!select->hasSelection()) {
             return;
         }
@@ -243,7 +256,7 @@ MainWindow::MainWindow(QWidget* parent)
                 entry.hasReplacement = true;
                 this->patchMap[entry.path] = patch;
 
-                emit this->patchLoaded();
+                emit this->patchLoaded(PatchLoaded::Manual);
             });
             QAction* unset_action = new QAction("Remove replacement", tableViewMenu);
             unset_action->setEnabled(false);
@@ -265,15 +278,24 @@ MainWindow::MainWindow(QWidget* parent)
     };
 
     // double click on table entry
-    connect(ui->tableView, &QTableView::doubleClicked, this, [=]() {
+    connect(ui->treeView, &QTreeView::doubleClicked, this, [=]() {
         QPoint globalCursorPos = QCursor::pos();
         showContextMenu(globalCursorPos);
     });
     // right click on table entry or context menu key
-    connect(ui->tableView, &QTableView::customContextMenuRequested, this, [=](const QPoint& clickPositionRelative) {
-        QPoint globalCursorPos = this->ui->tableView->viewport()->mapToGlobal(clickPositionRelative);
+    connect(ui->treeView, &QTreeView::customContextMenuRequested, this, [=](const QPoint& clickPositionRelative) {
+        QPoint globalCursorPos = this->ui->treeView->viewport()->mapToGlobal(clickPositionRelative);
         showContextMenu(globalCursorPos);
     });
+
+    if (!settings.value("ChronoTriggerExe").isValid() || !settings.value("ResourceBin").isValid()) {
+        return;
+    }
+    if (!QFile(settings.value("ChronoTriggerExe").toString()).exists() || !QFile(settings.value("ResourceBin").toString()).exists()) {
+        return;
+    }
+    open_archives(settings.value("ChronoTriggerExe").toString(), settings.value("ResourceBin").toString());
+    ;
 }
 
 MainWindow::~MainWindow()
@@ -288,6 +310,18 @@ void MainWindow::hidePreviews()
     ui->imagePreview2->hide();
     ui->fontPreview->hide();
     ui->fontPreview2->hide();
+}
+
+void MainWindow::refreshSelection()
+{
+    auto indexes = ui->treeView->selectionModel()->selectedIndexes();
+    ui->treeView->selectionModel()->clear();
+    hidePreviews();
+    for (auto& index : indexes) {
+        if (!ui->treeView->visualRect(index).isEmpty()) {
+            ui->treeView->selectionModel()->select(index, QItemSelectionModel::Select | QItemSelectionModel::Rows);
+        }
+    }
 }
 
 void MainWindow::loadRessourceBin(const QString& filepath)
@@ -313,6 +347,18 @@ void MainWindow::on_actionOpen_Archive_triggered()
         return;
     }
 
+    QString resourceBinFileName = QFileDialog::getOpenFileName(this, "Open Ressource.bin...", "C:\\Users\\james\\Downloads\\chrono_trigger", "BIN files (*.bin);;All files (*)");
+    qDebug() << resourceBinFileName;
+    if (resourceBinFileName.isEmpty()) {
+        return;
+    }
+    settings.setValue("ChronoTriggerExe", chronoFileName);
+    settings.setValue("ResourceBin", resourceBinFileName);
+    open_archives(chronoFileName, resourceBinFileName);
+}
+
+void MainWindow::open_archives(const QString& chronoFileName, const QString& resourceBinFileName)
+{
     QFile chronoFile(chronoFileName);
     std::vector<char> chronoBuffer(chronoFile.size());
     chronoFile.open(QIODevice::ReadOnly);
@@ -320,13 +366,7 @@ void MainWindow::on_actionOpen_Archive_triggered()
     chronoFile.close();
 
     decryption_key = get_key(chronoBuffer.data());
-
-    QString fileName = QFileDialog::getOpenFileName(this, "Open Ressource.bin...", "C:\\Users\\james\\Downloads\\chrono_trigger", "BIN files (*.bin);;All files (*)");
-    qDebug() << fileName;
-    if (fileName.isEmpty()) {
-        return;
-    }
-    loadRessourceBin(fileName);
+    loadRessourceBin(resourceBinFileName);
 }
 
 void MainWindow::on_actionExtract_All_triggered()
@@ -457,7 +497,7 @@ void MainWindow::on_actionLoad_Patch_triggered()
             }
         }
 
-        emit this->patchLoaded();
+        emit this->patchLoaded(PatchLoaded::FromPatch);
     });
 
     this->workerThread.start();

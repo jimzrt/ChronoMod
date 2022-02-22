@@ -42,21 +42,14 @@
          </widget>
         </item>
         <item>
-         <widget class="QTableView" name="tableView">
-          <property name="focusPolicy">
-           <enum>Qt::ClickFocus</enum>
-          </property>
+         <widget class="QTreeView" name="treeView">
           <property name="contextMenuPolicy">
            <enum>Qt::CustomContextMenu</enum>
           </property>
           <property name="styleSheet">
-           <string notr="true"/>
-          </property>
-          <property name="verticalScrollBarPolicy">
-           <enum>Qt::ScrollBarAsNeeded</enum>
-          </property>
-          <property name="horizontalScrollBarPolicy">
-           <enum>Qt::ScrollBarAsNeeded</enum>
+           <string notr="true">QTreeView::item {
+    padding: 5px;
+}</string>
           </property>
           <property name="editTriggers">
            <set>QAbstractItemView::NoEditTriggers</set>
@@ -67,23 +60,26 @@
           <property name="selectionMode">
            <enum>QAbstractItemView::ExtendedSelection</enum>
           </property>
-          <property name="selectionBehavior">
-           <enum>QAbstractItemView::SelectRows</enum>
+          <property name="rootIsDecorated">
+           <bool>false</bool>
           </property>
-          <property name="showGrid">
+          <property name="uniformRowHeights">
+           <bool>true</bool>
+          </property>
+          <property name="itemsExpandable">
            <bool>false</bool>
           </property>
           <property name="sortingEnabled">
            <bool>true</bool>
           </property>
-          <attribute name="horizontalHeaderHighlightSections">
-           <bool>false</bool>
-          </attribute>
-          <attribute name="horizontalHeaderStretchLastSection">
+          <property name="animated">
            <bool>true</bool>
-          </attribute>
-          <attribute name="verticalHeaderVisible">
+          </property>
+          <property name="expandsOnDoubleClick">
            <bool>false</bool>
+          </property>
+          <attribute name="headerShowSortIndicator" stdset="0">
+           <bool>true</bool>
           </attribute>
          </widget>
         </item>
@@ -276,7 +272,7 @@
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionOpen_Archive">
    <property name="text">
-    <string>Open Resource.bin...</string>
+    <string>Open Chrono Trigger.exe and Resource.bin...</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+O</string>

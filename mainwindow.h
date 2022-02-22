@@ -9,6 +9,7 @@
 
 #include <QFutureWatcher>
 #include <QMainWindow>
+#include <QSettings>
 #include <QTemporaryDir>
 
 QT_BEGIN_NAMESPACE
@@ -17,6 +18,11 @@ namespace Ui {
 class MainWindow;
 }
 QT_END_NAMESPACE
+
+enum class PatchLoaded {
+    Manual,
+    FromPatch
+};
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -29,7 +35,7 @@ public:
     void reload();
 signals:
     void ressourceBin_loaded();
-    void patchLoaded();
+    void patchLoaded(PatchLoaded);
     void modificationUnset();
 
 private slots:
@@ -44,6 +50,7 @@ private slots:
 private:
     Ui::MainWindow* ui;
     std::vector<uint32_t> decryption_key;
+    void open_archives(const QString& chronoFileName, const QString& resourceBinFileName);
     //std::vector<RessourceBinHeaderEntry> entry_list;
     std::shared_ptr<ResourceBin> ressourceBin;
     void extract_entries(const std::vector<ResourceEntry>& entries);
@@ -53,5 +60,8 @@ private:
     QTemporaryDir tempDir;
     void loadRessourceBin(const QString& filepath);
     void hidePreviews();
+    void refreshSelection();
+    QSettings settings;
+    ;
 };
 #endif // MAINWINDOW_H
