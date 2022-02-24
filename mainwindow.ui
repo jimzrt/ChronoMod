@@ -265,6 +265,7 @@
      <string>Patch</string>
     </property>
     <addaction name="actionLoad_Patch"/>
+    <addaction name="actionReplace_Font"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuPatch"/>
@@ -309,6 +310,14 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+S</string>
+   </property>
+  </action>
+  <action name="actionReplace_Font">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Replace Font...</string>
    </property>
   </action>
  </widget>

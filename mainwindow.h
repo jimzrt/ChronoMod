@@ -37,6 +37,7 @@ signals:
     void ressourceBin_loaded();
     void patchLoaded(PatchLoaded);
     void modificationUnset();
+    void error_message(QString errorMessage);
 
 private slots:
     void on_actionOpen_Archive_triggered();
@@ -46,6 +47,8 @@ private slots:
     void on_actionLoad_Patch_triggered();
 
     void on_actionSave_triggered();
+
+    void on_actionReplace_Font_triggered();
 
 private:
     Ui::MainWindow* ui;
@@ -63,5 +66,6 @@ private:
     void refreshSelection();
     QSettings settings;
     ;
+    void try_open_steambinaries();
 };
 #endif // MAINWINDOW_H

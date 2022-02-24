@@ -153,7 +153,7 @@ std::vector<char> decrypt_file_with_key(uint32_t* key, char* encrypted, int encr
 
     crypto(key, 0, encrypted_length - 8, (uint8_t*)header, (uint8_t*)data);
 
-    return std::vector<char>(data, data + encrypted_length - 8);
+    return { data, data + encrypted_length - 8 };
 }
 
 std::vector<char> encrypt_file_with_key(uint32_t* key, char* decrypted, int decrypted_length)

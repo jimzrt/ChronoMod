@@ -11,23 +11,23 @@
 #include <QDirIterator>
 #include <QFileDialog>
 #include <QFontDatabase>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMessageBox>
 #include <QPainter>
 #include <QSortFilterProxyModel>
 #include <QTreeWidget>
 
 // todo
-// check patch valid
-// delete and rename not in loop
-// ressource bin - graceful on close
+// more validation
 // status messages background job
 // stop background job
-// filtered count / modified count
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , settings("ChronoMod")
+    , settings("ChronoMod.ini", QSettings::IniFormat)
 {
 
     // apply dark theme
@@ -68,7 +68,7 @@ MainWindow::MainWindow(QWidget* parent)
         ui->statusbar->showMessage(QString("%1 of %2 entries").arg(proxyModel->rowCount()).arg(model->rowCount()));
     });
 
-    // worker thread for extracting
+    // worker thread for extracting and saving
     connect(&this->workerThread, &WorkerThread::started, ui->progressBar, &QProgressBar::show);
     connect(&this->workerThread, &WorkerThread::progressRangeChanged, ui->progressBar, &QProgressBar::setRange);
     connect(&this->workerThread, &WorkerThread::progressValueChanged, ui->progressBar, &QProgressBar::setValue);
@@ -83,6 +83,13 @@ MainWindow::MainWindow(QWidget* parent)
         proxyModel->invalidate();
         refreshSelection();
     });
+    connect(this, &MainWindow::error_message, this, [=](const QString& errorMessage) {
+        QMessageBox::critical(this, "Error",
+            errorMessage,
+            QMessageBox::Close);
+    });
+
+    // revert patch
     connect(this, &MainWindow::modificationUnset, this, [=]() {
         this->ui->actionSave->setEnabled(!this->patchMap.empty());
         proxyModel->invalidate();
@@ -94,6 +101,7 @@ MainWindow::MainWindow(QWidget* parent)
         ui->treeView->selectionModel()->clearSelection();
         ui->actionExtract_All->setEnabled(true);
         ui->actionLoad_Patch->setEnabled(true);
+        ui->actionReplace_Font->setEnabled(true);
         ui->lineEdit->setEnabled(true);
         ui->lineEdit->setText("");
         ui->plainTextEdit->hide();
@@ -158,21 +166,27 @@ MainWindow::MainWindow(QWidget* parent)
         }
 
         if (fileName.startsWith("string_")) {
+            QString previewText = "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum.";
             auto data = this->ressourceBin->extract(entry);
             auto decrypted = decrypt_file_with_key(decryption_key.data(), data.data(), data.size());
             QByteArray byteArray(decrypted.data(), decrypted.size());
             int font_id = QFontDatabase::addApplicationFontFromData(byteArray);
-            assert(font_id != -1);
-            QStringList font_families = QFontDatabase::applicationFontFamilies(font_id);
-            qDebug() << font_families;
 
-            QFont newFont(font_families[0], 14);
             hidePreviews();
-            ui->fontPreview->setFont(newFont);
-            QString previewText = "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.";
-            ui->fontPreview->setText(previewText);
-            ui->fontPreview->show();
+            if (font_id == -1) {
+                ui->fontPreview->setFont(QFont());
+                ui->fontPreview->setText("Not a valid font!");
 
+            } else {
+
+                QStringList font_families = QFontDatabase::applicationFontFamilies(font_id);
+                qDebug() << font_families;
+
+                QFont newFont(font_families[0], 14);
+                ui->fontPreview->setFont(newFont);
+                ui->fontPreview->setText(previewText);
+            }
+            ui->fontPreview->show();
             if (entry.hasReplacement) {
                 qDebug() << "has replacement!";
                 Patch& patch = this->patchMap[entry.path];
@@ -183,7 +197,12 @@ MainWindow::MainWindow(QWidget* parent)
                 patchFile.close();
                 QByteArray byteArray(decrypted.data(), decrypted.size());
                 int font_id = QFontDatabase::addApplicationFontFromData(byteArray);
-                assert(font_id != -1);
+                if (font_id == -1) {
+                    ui->fontPreview2->setFont(QFont());
+                    ui->fontPreview2->setText("Not a valid font!");
+                    ui->fontPreview2->show();
+                    return;
+                }
                 QStringList font_families = QFontDatabase::applicationFontFamilies(font_id);
                 qDebug() << font_families;
 
@@ -288,14 +307,43 @@ MainWindow::MainWindow(QWidget* parent)
         showContextMenu(globalCursorPos);
     });
 
-    if (!settings.value("ChronoTriggerExe").isValid() || !settings.value("ResourceBin").isValid()) {
+    // load chrono paths from settings if they exist
+    if (settings.value("ChronoTriggerExe").isValid() && settings.value("ResourceBin").isValid()) {
+        if (QFile(settings.value("ChronoTriggerExe").toString()).exists() && QFile(settings.value("ResourceBin").toString()).exists()) {
+            open_archives(settings.value("ChronoTriggerExe").toString(), settings.value("ResourceBin").toString());
+            return;
+        }
+    }
+
+    // check steam folder for chrono paths
+    try_open_steambinaries();
+}
+
+void MainWindow::try_open_steambinaries()
+{
+    QSettings steam("HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Valve\\Steam", QSettings::Registry64Format);
+    if (!steam.value("InstallPath").isValid()) {
         return;
     }
-    if (!QFile(settings.value("ChronoTriggerExe").toString()).exists() || !QFile(settings.value("ResourceBin").toString()).exists()) {
-        return;
+    QStringList libraryPaths;
+    QRegularExpression library_pattern("path\"\t\t\"(.*)\"");
+    QDir steamDir(steam.value("InstallPath").toString());
+    QFile libraryFile(steamDir.absoluteFilePath("steamapps/libraryfolders.vdf"));
+    libraryFile.open(QFile::ReadOnly);
+    auto match = library_pattern.globalMatch(libraryFile.readAll());
+    libraryFile.close();
+    while (match.hasNext()) {
+        libraryPaths << match.next().captured(1);
     }
-    open_archives(settings.value("ChronoTriggerExe").toString(), settings.value("ResourceBin").toString());
-    ;
+    for (auto& libraryPath : libraryPaths) {
+        if (QDir(libraryPath).exists("steamapps/appmanifest_613830.acf")) {
+
+            QString chronoFileName = QDir(libraryPath).absoluteFilePath("steamapps/common/Chrono Trigger/Chrono Trigger.exe");
+            QString resourceBinFileName = QDir(libraryPath).absoluteFilePath("steamapps/common/Chrono Trigger/resources.bin");
+            open_archives(QDir::toNativeSeparators(chronoFileName), QDir::toNativeSeparators(resourceBinFileName));
+            return;
+        }
+    }
 }
 
 MainWindow::~MainWindow()
@@ -341,19 +389,18 @@ void MainWindow::loadRessourceBin(const QString& filepath)
 void MainWindow::on_actionOpen_Archive_triggered()
 {
 
-    QString chronoFileName = QFileDialog::getOpenFileName(this, "Open Chrono Trigger.exe...", "F:\\SteamLibrary\\steamapps\\common\\Chrono Trigger", "Exe files (*.exe);;All files (*)");
+    QString chronoFileName = QFileDialog::getOpenFileName(this, "Open Chrono Trigger.exe...", QDir::homePath(), "Executables (*.exe);;All files (*)");
     qDebug() << chronoFileName;
     if (chronoFileName.isEmpty()) {
         return;
     }
 
-    QString resourceBinFileName = QFileDialog::getOpenFileName(this, "Open Ressource.bin...", "C:\\Users\\james\\Downloads\\chrono_trigger", "BIN files (*.bin);;All files (*)");
+    QString resourceBinFileName = QFileDialog::getOpenFileName(this, "Open Ressource.bin...", QDir::homePath(), "BIN files (*.bin);;All files (*)");
     qDebug() << resourceBinFileName;
     if (resourceBinFileName.isEmpty()) {
         return;
     }
-    settings.setValue("ChronoTriggerExe", chronoFileName);
-    settings.setValue("ResourceBin", resourceBinFileName);
+
     open_archives(chronoFileName, resourceBinFileName);
 }
 
@@ -366,6 +413,10 @@ void MainWindow::open_archives(const QString& chronoFileName, const QString& res
     chronoFile.close();
 
     decryption_key = get_key(chronoBuffer.data());
+
+    settings.setValue("ChronoTriggerExe", chronoFileName);
+    settings.setValue("ResourceBin", resourceBinFileName);
+
     loadRessourceBin(resourceBinFileName);
 }
 
@@ -402,7 +453,8 @@ void MainWindow::extract_entries(const std::vector<ResourceEntry>& entries)
                 QDir finalDirectory(QFileInfo(finalPath).absolutePath());
 
                 if (!finalDirectory.mkpath(finalDirectory.path())) {
-                    throw std::runtime_error("file could not be created");
+                    emit this->error_message("Temporary file could not be created");
+                    return;
                 }
 
                 auto ret = this->ressourceBin->extract(entry);
@@ -446,7 +498,7 @@ void MainWindow::extract_entries(const std::vector<ResourceEntry>& entries)
 void MainWindow::on_actionLoad_Patch_triggered()
 {
 
-    QString fileName = QFileDialog::getOpenFileName(this, "Open Patch...", "C:\\Users\\james\\Downloads\\chrono_trigger", "CTP files (*.ctp);;All files (*)");
+    QString fileName = QFileDialog::getOpenFileName(this, "Open Patch...", QDir::homePath(), "CTP files (*.ctp);;All files (*)");
     qDebug() << fileName;
     if (fileName.isEmpty()) {
         return;
@@ -467,10 +519,14 @@ void MainWindow::on_actionLoad_Patch_triggered()
         QDir finalDirectory(finalPath);
 
         if (!finalDirectory.mkpath(finalDirectory.path())) {
-            throw std::runtime_error("file could not be created");
+            emit this->error_message("Temporary file could not be created");
+            return;
         }
 
-        JlCompress::extractDir(fileName, finalPath);
+        if (JlCompress::extractDir(fileName, finalPath).isEmpty()) {
+            emit this->error_message("Not a valid patch!");
+            return;
+        }
 
         finalDirectory.setFilter(QDir::Files | QDir::NoDotAndDotDot | QDir::NoSymLinks);
         QDirIterator it(finalDirectory, QDirIterator::Subdirectories);
@@ -543,17 +599,75 @@ void MainWindow::on_actionSave_triggered()
         }
 
         ressourceBin->close();
-        while (!QFile::remove(current_file.absoluteFilePath())) {
+        QString currentFilePath = current_file.absoluteFilePath();
+        int trys = 10;
+        while (trys > 0 && !QFile::remove(currentFilePath)) {
             qDebug() << "remove error";
-            QThread::sleep(1);
+            QThread::msleep(100);
+            --trys;
         }
-        while (!QFile::rename(new_path, current_file.absoluteFilePath())) {
+        if (trys == 0) {
+            QMessageBox::critical(this, "Error",
+                "Could not replace Resource.bin!\n"
+                "Saved as Resource.bin_new - close program and rename manually!",
+                QMessageBox::Close);
+            currentFilePath = currentFilePath + "_new";
+        }
+        trys = 10;
+        while (trys > 0 && !QFile::rename(new_path, currentFilePath)) {
             qDebug() << "rename error";
-            QThread::sleep(1);
+            QThread::msleep(100);
+            --trys;
         }
-
+        if (trys == 0) {
+            QMessageBox::critical(this, "Error",
+                "Could not save as Resource.bin_new!\n"
+                "Please talk to Mr developer.",
+                QMessageBox::Close);
+        }
         reload();
     });
 
     this->workerThread.start();
+}
+
+void MainWindow::on_actionReplace_Font_triggered()
+{
+
+    auto& entries = this->ressourceBin->getEntries();
+
+    auto it = find_if(entries.begin(), entries.end(), [](const auto& entry) { return entry.path == "string_2.bin"; });
+    if (it == entries.end()) {
+        // todo
+        qDebug() << "font not found";
+        return;
+    }
+
+    auto& fontEntry = *it;
+
+    QString fileName = QFileDialog::getOpenFileName(this, "Open replacement...", QDir::homePath(), "Font files (*.ttf)");
+    qDebug() << fileName;
+    if (fileName.isEmpty()) {
+        return;
+    }
+
+    QFile patchFile(fileName);
+    std::vector<char> patchBuffer(patchFile.size());
+    patchFile.open(QIODevice::ReadOnly);
+    patchFile.read(patchBuffer.data(), patchBuffer.size());
+    patchFile.close();
+    auto encrypted = encrypt_file_with_key(decryption_key.data(), patchBuffer.data(), patchBuffer.size());
+
+    QString finalPath = QDir(tempDir.path()).filePath(QString::fromStdString(fontEntry.path));
+    QFile decryptedPatchFile(finalPath);
+    decryptedPatchFile.open(QFile::WriteOnly);
+    decryptedPatchFile.write(encrypted.data(), encrypted.size());
+    decryptedPatchFile.close();
+    fileName = finalPath;
+
+    Patch patch(fileName.toStdString());
+    fontEntry.hasReplacement = true;
+    this->patchMap[fontEntry.path] = patch;
+
+    emit this->patchLoaded(PatchLoaded::Manual);
 }

@@ -294,6 +294,9 @@ std::vector<char> ResourceBin::extract(const ResourceEntry& entry)
 
 void ResourceBin::create_with_modifications(std::unordered_map<std::string, Patch>& patchMap, const std::string& path, const std::function<void(int)>& progress_callback)
 {
+    if (closed) {
+        return;
+    }
     std::ofstream out_stream(path, std::ios::binary);
 
     // skip first bytes - we don't know the offsets yet
