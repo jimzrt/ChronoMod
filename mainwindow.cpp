@@ -45,6 +45,7 @@ MainWindow::MainWindow(QWidget* parent)
     ui->setupUi(this);
     hidePreviews();
     ui->progressBar->setHidden(true);
+    this->decrypt_on_extract = ui->actionDecrypt_fonts_on_extraction->isChecked();
 
     QMenu* tableViewMenu = new QMenu(this);
 
@@ -54,6 +55,11 @@ MainWindow::MainWindow(QWidget* parent)
 
     ui->treeView->setModel(proxyModel);
     ui->treeView->header()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+
+    // decrypt on extract
+    connect(ui->actionDecrypt_fonts_on_extraction, &QAction::toggled, this, [=](bool checked) {
+        this->decrypt_on_extract = checked;
+    });
 
     // filter entries
     connect(ui->lineEdit, &QLineEdit::textChanged, proxyModel, &ResourceEntryProxyModel::setCurrentSearchString);
@@ -460,7 +466,7 @@ void MainWindow::extract_entries(const std::vector<ResourceEntry>& entries)
                 auto ret = this->ressourceBin->extract(entry);
 
                 // decrypt string files
-                if (QString::fromStdString(entry.path).startsWith("string_")) {
+                if (this->decrypt_on_extract && QString::fromStdString(entry.path).startsWith("string_")) {
                     auto decrypted = decrypt_file_with_key(decryption_key.data(), ret.data(), ret.size());
                     ret = std::move(decrypted);
                 }
@@ -484,7 +490,7 @@ void MainWindow::extract_entries(const std::vector<ResourceEntry>& entries)
     auto ret = this->ressourceBin->extract(entries[0]);
 
     // decrypt string files
-    if (QString::fromStdString(entries[0].path).startsWith("string_")) {
+    if (this->decrypt_on_extract && QString::fromStdString(entries[0].path).startsWith("string_")) {
         auto decrypted = decrypt_file_with_key(decryption_key.data(), ret.data(), ret.size());
         ret = std::move(decrypted);
     }

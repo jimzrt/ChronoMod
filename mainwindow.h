@@ -52,6 +52,7 @@ private slots:
 
 private:
     Ui::MainWindow* ui;
+    bool decrypt_on_extract;
     std::vector<uint32_t> decryption_key;
     void open_archives(const QString& chronoFileName, const QString& resourceBinFileName);
     //std::vector<RessourceBinHeaderEntry> entry_list;

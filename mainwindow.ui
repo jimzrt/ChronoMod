@@ -259,6 +259,7 @@
     <addaction name="separator"/>
     <addaction name="actionSave"/>
     <addaction name="actionExtract_All"/>
+    <addaction name="actionDecrypt_fonts_on_extraction"/>
    </widget>
    <widget class="QMenu" name="menuPatch">
     <property name="title">
@@ -318,6 +319,14 @@
    </property>
    <property name="text">
     <string>Replace Font...</string>
+   </property>
+  </action>
+  <action name="actionDecrypt_fonts_on_extraction">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Decrypt fonts on extraction</string>
    </property>
   </action>
  </widget>
