@@ -43,13 +43,20 @@
         </item>
         <item>
          <widget class="QTreeView" name="treeView">
+          <property name="focusPolicy">
+           <enum>Qt::StrongFocus</enum>
+          </property>
           <property name="contextMenuPolicy">
            <enum>Qt::CustomContextMenu</enum>
           </property>
           <property name="styleSheet">
            <string notr="true">QTreeView::item {
     padding: 5px;
+border: none;
 }</string>
+          </property>
+          <property name="frameShadow">
+           <enum>QFrame::Sunken</enum>
           </property>
           <property name="editTriggers">
            <set>QAbstractItemView::NoEditTriggers</set>
