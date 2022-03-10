@@ -264,9 +264,10 @@ border: none;
     </property>
     <addaction name="actionOpen_Archive"/>
     <addaction name="separator"/>
-    <addaction name="actionSave"/>
-    <addaction name="actionExtract_All"/>
+    <addaction name="separator"/>
     <addaction name="actionDecrypt_fonts_on_extraction"/>
+    <addaction name="actionExtract_All"/>
+    <addaction name="actionSave"/>
    </widget>
    <widget class="QMenu" name="menuPatch">
     <property name="title">
