@@ -48,14 +48,15 @@ SET(QUAZIP_USE_QT_ZLIB OFF CACHE INTERNAL "" FORCE)
 
 
 
-add_subdirectory("3rdparty/zlib-1.2.11")
-#set(ZLIB_LIBRARY "${PROJECT_SOURCE_DIR}/3rdparty/zlib-1.2.11/lib")
-set(ZLIB_ROOT "${CMAKE_SOURCE_DIR}/3rdparty/zlib-1.2.11" CACHE INTERNAL "" FORCE)
-set(ZLIB_LIBRARY "${PROJECT_BINARY_DIR}/3rdparty/zlib-1.2.11/libzlibstatic.a" CACHE INTERNAL "" FORCE)
-#set(ZLIB_LIBRARY zlibstatic CACHE INTERNAL "" FORCE)
+set(ZLIB_COMPAT ON CACHE INTERNAL "" FORCE)
+set(ZLIB_ROOT "${CMAKE_SOURCE_DIR}/3rdparty/zlib" CACHE INTERNAL "" FORCE)
+set(ZLIB_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/3rdparty/zlib" CACHE INTERNAL "" FORCE)
+set(ZLIB_LIBRARY "${PROJECT_BINARY_DIR}/3rdparty/zlib/libz.a" CACHE INTERNAL "" FORCE)
+add_subdirectory("3rdparty/zlib")
 
 
-add_subdirectory("3rdparty/quala")
+
+add_subdirectory("3rdparty/quazip")
 
 
 target_link_libraries(ChronoMod PUBLIC
