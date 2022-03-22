@@ -50,6 +50,8 @@ private slots:
 
     void on_actionReplace_Font_triggered();
 
+    void on_actionSave_Patch_triggered();
+
 private:
     Ui::MainWindow* ui;
     bool decrypt_on_extract;

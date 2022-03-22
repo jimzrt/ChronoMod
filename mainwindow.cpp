@@ -660,3 +660,31 @@ void MainWindow::on_actionReplace_Font_triggered()
 
     emit this->patchLoaded(PatchLoaded::Manual);
 }
+
+void MainWindow::on_actionSave_Patch_triggered()
+{
+
+    QString saveName = QFileDialog::getSaveFileName(this, "Save Patch", "patch.ctp");
+    if (saveName.isEmpty()) {
+        return;
+    }
+    QuaZip zip(saveName);
+    if (!zip.open(QuaZip::mdCreate)) {
+        qWarning("Couldn't open %s", saveName.toUtf8().constData());
+        return;
+    }
+
+    for (const auto& [filePath, patch] : this->patchMap) {
+        qDebug() << QString::fromStdString(filePath);
+        QuaZipNewInfo newInfo(QString::fromStdString(filePath));
+        QuaZipFile zipFile(&zip);
+        zipFile.open(QIODevice::WriteOnly, newInfo, NULL, 0, 8);
+        QFile patchFile(QString::fromStdString(patch.path));
+        patchFile.open(QIODevice::ReadOnly);
+        zipFile.write(patchFile.readAll());
+        patchFile.close();
+        zipFile.close();
+    }
+    zip.setComment(QString("Created with ChronoMod"));
+    zip.close();
+}
