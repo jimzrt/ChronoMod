@@ -117,9 +117,9 @@ void blowfish(uint32_t* keybuffer, char* blowfish_s_init, const char* blowfish_p
 
 void blowfish_chrono(uint32_t* keybuffer, char* chrono_binary)
 {
-    char* blowfish_s_init = chrono_binary + 0x39A138;
-    char* blowfish_p_init = blowfish_s_init + 0x1000;
-    char* blowfish_key = blowfish_s_init - 0x1850; // 0xba, 0xec, 0xb7, 0x8a, 0xea, 0x25, 0xca, 0xe4
+    char* blowfish_s_init = chrono_binary + 0x39A738; // A6 0B 31 D1 AC B5 DF 98
+    char* blowfish_p_init = chrono_binary + 0x39B738; // 88 6A 3F 24 D3 08 A3 85
+    char* blowfish_key = chrono_binary + 0x398EE8; // BA EC B7 8A EA 25 CA E4
     blowfish(keybuffer, blowfish_s_init, blowfish_p_init, blowfish_key);
 }
 
