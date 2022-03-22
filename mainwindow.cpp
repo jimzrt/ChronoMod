@@ -260,23 +260,6 @@ MainWindow::MainWindow(QWidget* parent)
                 }
 
                 auto& entry = this->ressourceBin->getEntries()[entry_index];
-                // encryt string files
-                if (QString::fromStdString(entry.path).startsWith("string_")) {
-
-                    QFile patchFile(fileName);
-                    std::vector<char> patchBuffer(patchFile.size());
-                    patchFile.open(QIODevice::ReadOnly);
-                    patchFile.read(patchBuffer.data(), patchBuffer.size());
-                    patchFile.close();
-                    auto encrypted = encrypt_file_with_key(decryption_key.data(), patchBuffer.data(), patchBuffer.size());
-
-                    QString finalPath = QDir(tempDir.path()).filePath(QString::fromStdString(entry.path));
-                    QFile decryptedPatchFile(finalPath);
-                    decryptedPatchFile.open(QFile::WriteOnly);
-                    decryptedPatchFile.write(encrypted.data(), encrypted.size());
-                    decryptedPatchFile.close();
-                    fileName = finalPath;
-                }
                 Patch patch(fileName.toStdString());
                 entry.hasReplacement = true;
                 this->patchMap[entry.path] = patch;
