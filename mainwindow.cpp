@@ -47,6 +47,9 @@ MainWindow::MainWindow(QWidget* parent)
     ui->progressBar->setHidden(true);
     this->decrypt_on_extract = ui->actionDecrypt_fonts_on_extraction->isChecked();
 
+    // resize preview on splitter movement
+    connect(ui->splitter, &QSplitter::splitterMoved, this, &MainWindow::resizePreviewImages);
+
     QMenu* tableViewMenu = new QMenu(this);
 
     ResourceEntryModel* model = new ResourceEntryModel(this);
@@ -150,22 +153,18 @@ MainWindow::MainWindow(QWidget* parent)
         if (fileName.endsWith(".png") || fileName.endsWith(".bmp")) {
             bool png = fileName.endsWith(".png");
             auto data = this->ressourceBin->extract(entry);
-            QPixmap image;
-            image.loadFromData((const unsigned char*)data.data(), data.size(), png ? "PNG" : "BMP");
-            image = image.scaled(250, 250, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            previewImage1.loadFromData((const unsigned char*)data.data(), data.size(), png ? "PNG" : "BMP");
             hidePreviews();
-            ui->imagePreview->setPixmap(image);
+            ui->imagePreview->setPixmap(previewImage1.scaled(ui->groupBox->width() * 0.9, ui->groupBox->height() / 2 * 0.9, Qt::KeepAspectRatio, Qt::FastTransformation));
             ui->imagePreview->show();
             if (entry.hasReplacement) {
                 qDebug() << "has replacement!";
                 Patch& patch = this->patchMap[entry.path];
                 QFile patchFile(QString::fromStdString(patch.path));
                 patchFile.open(QFile::ReadOnly);
-                QPixmap image2;
-                image2.loadFromData(patchFile.readAll(), png ? "PNG" : "BMP");
+                previewImage2.loadFromData(patchFile.readAll(), png ? "PNG" : "BMP");
                 patchFile.close();
-                image2 = image2.scaled(250, 250, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-                ui->imagePreview2->setPixmap(image2);
+                ui->imagePreview2->setPixmap(previewImage2.scaled(ui->groupBox->width() * 0.9, ui->groupBox->height() / 2 * 0.9, Qt::KeepAspectRatio, Qt::FastTransformation));
                 ui->imagePreview2->show();
             }
             return;
@@ -687,4 +686,17 @@ void MainWindow::on_actionSave_Patch_triggered()
     }
     zip.setComment(QString("Created with ChronoMod"));
     zip.close();
+}
+
+void MainWindow::resizePreviewImages()
+{
+    if (ui->imagePreview->isVisible())
+        ui->imagePreview->setPixmap(previewImage1.scaled(ui->groupBox->width() * 0.9, ui->groupBox->height() / 2 * 0.9, Qt::KeepAspectRatio, Qt::FastTransformation));
+    if (ui->imagePreview2->isVisible())
+        ui->imagePreview2->setPixmap(previewImage2.scaled(ui->groupBox->width() * 0.9, ui->groupBox->height() / 2 * 0.9, Qt::KeepAspectRatio, Qt::FastTransformation));
+}
+
+void MainWindow::resizeEvent(QResizeEvent* event)
+{
+    this->resizePreviewImages();
 }

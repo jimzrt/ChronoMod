@@ -64,11 +64,15 @@ private:
     std::unique_ptr<QThread> qthread;
     std::unordered_map<std::string, Patch> patchMap;
     QTemporaryDir tempDir;
+    QPixmap previewImage1;
+    QPixmap previewImage2;
     void loadRessourceBin(const QString& filepath);
     void hidePreviews();
     void refreshSelection();
     QSettings settings;
     ;
     void try_open_steambinaries();
+    void resizePreviewImages();
+    void resizeEvent(QResizeEvent* event) override;
 };
 #endif // MAINWINDOW_H
