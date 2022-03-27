@@ -54,13 +54,12 @@ private slots:
 
 private:
     Ui::MainWindow* ui;
-    bool decrypt_on_extract;
     std::vector<uint32_t> decryption_key;
     void open_archives(const QString& chronoFileName, const QString& resourceBinFileName);
-    //std::vector<RessourceBinHeaderEntry> entry_list;
+    // std::vector<RessourceBinHeaderEntry> entry_list;
     std::shared_ptr<ResourceBin> ressourceBin;
     void extract_entries(const std::vector<ResourceEntry>& entries);
-    //QFutureWatcher<void> taskWatcher;
+    // QFutureWatcher<void> taskWatcher;
     std::unique_ptr<QThread> qthread;
     std::unordered_map<std::string, Patch> patchMap;
     QTemporaryDir tempDir;
@@ -73,6 +72,7 @@ private:
     ;
     void try_open_steambinaries();
     void resizePreviewImages();
+    void replaceFont(ResourceEntry& fontEntry);
     void resizeEvent(QResizeEvent* event) override;
 };
 #endif // MAINWINDOW_H

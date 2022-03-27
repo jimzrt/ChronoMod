@@ -45,7 +45,6 @@ MainWindow::MainWindow(QWidget* parent)
     ui->setupUi(this);
     hidePreviews();
     ui->progressBar->setHidden(true);
-    this->decrypt_on_extract = ui->actionDecrypt_fonts_on_extraction->isChecked();
 
     // resize preview on splitter movement
     connect(ui->splitter, &QSplitter::splitterMoved, this, &MainWindow::resizePreviewImages);
@@ -58,11 +57,6 @@ MainWindow::MainWindow(QWidget* parent)
 
     ui->treeView->setModel(proxyModel);
     ui->treeView->header()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-
-    // decrypt on extract
-    connect(ui->actionDecrypt_fonts_on_extraction, &QAction::toggled, this, [=](bool checked) {
-        this->decrypt_on_extract = checked;
-    });
 
     // filter entries
     connect(ui->lineEdit, &QLineEdit::textChanged, proxyModel, &ResourceEntryProxyModel::setCurrentSearchString);
@@ -249,6 +243,32 @@ MainWindow::MainWindow(QWidget* parent)
         if (selectedRows.size() == 1) {
             int entry_index = proxyModel->mapToSource(selectedRows[0]).row();
 
+            auto& entry = this->ressourceBin->getEntries()[entry_index];
+
+            if (QString::fromStdString(entry.path).startsWith("string_")) {
+                QAction* extract_ttf_action = new QAction("Extract ttf...", tableViewMenu);
+                tableViewMenu->addAction(extract_ttf_action);
+                connect(extract_ttf_action, &QAction::triggered, this, [=] {
+                    auto& entry = this->ressourceBin->getEntries()[entry_index];
+                    QString fileName = QFileInfo(QString::fromStdString(entry.path)).fileName().replace(".bin", ".ttf");
+                    QString saveName = QFileDialog::getSaveFileName(this, "Extract File", fileName);
+                    if (saveName.isEmpty()) {
+                        return;
+                    }
+                    auto ret = this->ressourceBin->extract(entry);
+
+                    // decrypt string files
+                    auto decrypted = decrypt_file_with_key(decryption_key.data(), ret.data(), ret.size());
+                    ret = std::move(decrypted);
+
+                    QFile file(saveName);
+                    file.open(QIODevice::WriteOnly);
+                    file.write(ret.data(), ret.size());
+                    file.close();
+                    this->ui->statusbar->showMessage(QString("%1 extracted").arg(fileName));
+                });
+            }
+
             QAction* replace_action = new QAction("Replace...", tableViewMenu);
             tableViewMenu->addAction(replace_action);
             connect(replace_action, &QAction::triggered, this, [=] {
@@ -265,10 +285,22 @@ MainWindow::MainWindow(QWidget* parent)
 
                 emit this->patchLoaded(PatchLoaded::Manual);
             });
+
+            // todo
+
+            if (QString::fromStdString(entry.path).startsWith("string_")) {
+                QAction* replace_ttf_action = new QAction("Replace with ttf...", tableViewMenu);
+                tableViewMenu->addAction(replace_ttf_action);
+                connect(replace_ttf_action, &QAction::triggered, this, [=] {
+                    auto& entry = this->ressourceBin->getEntries()[entry_index];
+                    replaceFont(entry);
+                });
+            }
+
             QAction* unset_action = new QAction("Remove replacement", tableViewMenu);
             unset_action->setEnabled(false);
             tableViewMenu->addAction(unset_action);
-            if (this->ressourceBin->getEntries()[entry_index].hasReplacement) {
+            if (entry.hasReplacement) {
                 unset_action->setEnabled(true);
                 connect(unset_action, &QAction::triggered, this, [=] {
                     auto& entry = this->ressourceBin->getEntries()[entry_index];
@@ -436,7 +468,7 @@ void MainWindow::extract_entries(const std::vector<ResourceEntry>& entries)
             for (auto& entry : entries) {
 
                 QString finalPath = QDir(extract_dir).filePath(QString::fromStdString(entry.path));
-                //qDebug() << finalPath;
+                // qDebug() << finalPath;
 
                 QDir finalDirectory(QFileInfo(finalPath).absolutePath());
 
@@ -446,12 +478,6 @@ void MainWindow::extract_entries(const std::vector<ResourceEntry>& entries)
                 }
 
                 auto ret = this->ressourceBin->extract(entry);
-
-                // decrypt string files
-                if (this->decrypt_on_extract && QString::fromStdString(entry.path).startsWith("string_")) {
-                    auto decrypted = decrypt_file_with_key(decryption_key.data(), ret.data(), ret.size());
-                    ret = std::move(decrypted);
-                }
                 QFile file(finalPath);
                 file.open(QIODevice::WriteOnly);
                 file.write(ret.data(), ret.size());
@@ -470,12 +496,6 @@ void MainWindow::extract_entries(const std::vector<ResourceEntry>& entries)
         return;
     }
     auto ret = this->ressourceBin->extract(entries[0]);
-
-    // decrypt string files
-    if (this->decrypt_on_extract && QString::fromStdString(entries[0].path).startsWith("string_")) {
-        auto decrypted = decrypt_file_with_key(decryption_key.data(), ret.data(), ret.size());
-        ret = std::move(decrypted);
-    }
     QFile file(saveName);
     file.open(QIODevice::WriteOnly);
     file.write(ret.data(), ret.size());
@@ -619,20 +639,8 @@ void MainWindow::on_actionSave_triggered()
     this->workerThread.start();
 }
 
-void MainWindow::on_actionReplace_Font_triggered()
+void MainWindow::replaceFont(ResourceEntry& fontEntry)
 {
-
-    auto& entries = this->ressourceBin->getEntries();
-
-    auto it = find_if(entries.begin(), entries.end(), [](const auto& entry) { return entry.path == "string_2.bin"; });
-    if (it == entries.end()) {
-        // todo
-        qDebug() << "font not found";
-        return;
-    }
-
-    auto& fontEntry = *it;
-
     QString fileName = QFileDialog::getOpenFileName(this, "Open replacement...", QDir::homePath(), "Font files (*.ttf)");
     qDebug() << fileName;
     if (fileName.isEmpty()) {
@@ -656,8 +664,23 @@ void MainWindow::on_actionReplace_Font_triggered()
     Patch patch(fileName.toStdString());
     fontEntry.hasReplacement = true;
     this->patchMap[fontEntry.path] = patch;
-
     emit this->patchLoaded(PatchLoaded::Manual);
+}
+
+void MainWindow::on_actionReplace_Font_triggered()
+{
+
+    auto& entries = this->ressourceBin->getEntries();
+
+    auto it = find_if(entries.begin(), entries.end(), [](const auto& entry) { return entry.path == "string_2.bin"; });
+    if (it == entries.end()) {
+        // todo
+        qDebug() << "font not found";
+        return;
+    }
+
+    auto& fontEntry = *it;
+    replaceFont(fontEntry);
 }
 
 void MainWindow::on_actionSave_Patch_triggered()

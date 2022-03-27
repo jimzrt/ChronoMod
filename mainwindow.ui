@@ -16,6 +16,13 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_3">
     <item>
+     <widget class="QProgressBar" name="progressBar">
+      <property name="value">
+       <number>24</number>
+      </property>
+     </widget>
+    </item>
+    <item>
      <widget class="QSplitter" name="splitter">
       <property name="frameShape">
        <enum>QFrame::NoFrame</enum>
@@ -34,13 +41,6 @@
       </property>
       <widget class="QWidget" name="layoutWidget">
        <layout class="QVBoxLayout" name="verticalLayout">
-        <item>
-         <widget class="QProgressBar" name="progressBar">
-          <property name="value">
-           <number>24</number>
-          </property>
-         </widget>
-        </item>
         <item>
          <widget class="QTreeView" name="treeView">
           <property name="focusPolicy">
@@ -265,7 +265,6 @@ border: none;
     <addaction name="actionOpen_Archive"/>
     <addaction name="separator"/>
     <addaction name="separator"/>
-    <addaction name="actionDecrypt_fonts_on_extraction"/>
     <addaction name="actionExtract_All"/>
     <addaction name="actionSave"/>
    </widget>
