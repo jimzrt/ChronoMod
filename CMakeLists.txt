@@ -1,7 +1,9 @@
 # Generated from ChronoMod.pro.
 
 cmake_minimum_required(VERSION 3.16)
-project(ChronoMod LANGUAGES CXX)
+project(ChronoMod VERSION "1.2.1" LANGUAGES CXX)
+configure_file(config.h.in config.h @ONLY)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -18,6 +20,8 @@ find_package(Qt6 COMPONENTS Core)
 find_package(Qt6 COMPONENTS Gui)
 find_package(Qt6 COMPONENTS Core5Compat)
 find_package(Qt6 COMPONENTS Widgets)
+find_package(Qt6 COMPONENTS Network)
+
 
 qt_add_executable(ChronoMod WIN32 MACOSX_BUNDLE
     ChronoCrypto.cpp ChronoCrypto.h
@@ -64,6 +68,7 @@ target_link_libraries(ChronoMod PUBLIC
     Qt::Core5Compat
     Qt::Gui
     Qt::Widgets
+    Qt::Network
     QuaZip::QuaZip
 )
 

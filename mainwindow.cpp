@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "Patch.h"
 #include "WorkerThread.h"
+#include "config.h"
 #include "quazip.h"
 #include "resourcebin.h"
 #include "resourceentrymodel.h"
@@ -8,6 +9,7 @@
 #include "ui_mainwindow.h"
 #include <ChronoCrypto.h>
 #include <JlCompress.h>
+#include <QDesktopServices>
 #include <QDirIterator>
 #include <QFileDialog>
 #include <QFontDatabase>
@@ -15,9 +17,13 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMessageBox>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QPainter>
 #include <QSortFilterProxyModel>
 #include <QTreeWidget>
+#include <QVersionNumber>
 
 // todo
 // more validation
@@ -43,8 +49,11 @@ MainWindow::MainWindow(QWidget* parent)
 
     // setup ui and models
     ui->setupUi(this);
+
     hidePreviews();
     ui->progressBar->setHidden(true);
+
+    checkUpdate();
 
     // resize preview on splitter movement
     connect(ui->splitter, &QSplitter::splitterMoved, this, &MainWindow::resizePreviewImages);
@@ -68,7 +77,7 @@ MainWindow::MainWindow(QWidget* parent)
         if (!ui->treeView->selectionModel()->selectedIndexes().empty()) {
             ui->treeView->scrollTo(ui->treeView->selectionModel()->selectedIndexes()[0]);
         }
-        ui->statusbar->showMessage(QString("%1 of %2 entries").arg(proxyModel->rowCount()).arg(model->rowCount()));
+        ui->resourceStatusLabel->setText(QString("%1 of %2 entries").arg(proxyModel->rowCount()).arg(model->rowCount()));
     });
 
     // worker thread for extracting and saving
@@ -115,7 +124,7 @@ MainWindow::MainWindow(QWidget* parent)
         auto& entrty_list = this->ressourceBin->getEntries();
         model->setModelData(&entrty_list);
         ui->treeView->sortByColumn(0, Qt::AscendingOrder);
-        this->setWindowTitle(QString("ChronoMod - %1").arg(QString::fromStdString(this->ressourceBin->get_path())));
+        this->setWindowTitle(QString("ChronoMod %1 - %2").arg(PROJECT_VERSION).arg(QString::fromStdString(this->ressourceBin->get_path())));
     });
 
     // preview selected  entry
@@ -286,8 +295,6 @@ MainWindow::MainWindow(QWidget* parent)
                 emit this->patchLoaded(PatchLoaded::Manual);
             });
 
-            // todo
-
             if (QString::fromStdString(entry.path).startsWith("string_")) {
                 QAction* replace_ttf_action = new QAction("Replace with ttf...", tableViewMenu);
                 tableViewMenu->addAction(replace_ttf_action);
@@ -346,7 +353,7 @@ void MainWindow::try_open_steambinaries()
         return;
     }
     QStringList libraryPaths;
-    QRegularExpression library_pattern("path\"\t\t\"(.*)\"");
+    static QRegularExpression library_pattern("path\"\t\t\"(.*)\"");
     QDir steamDir(steam.value("InstallPath").toString());
     QFile libraryFile(steamDir.absoluteFilePath("steamapps/libraryfolders.vdf"));
     libraryFile.open(QFile::ReadOnly);
@@ -369,6 +376,38 @@ void MainWindow::try_open_steambinaries()
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::checkUpdate()
+{
+    ui->statusbar->showMessage("Checking for update...");
+    QUrl url("https://api.github.com/repos/jimzrt/ChronoMod/tags");
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    QNetworkAccessManager* nam = new QNetworkAccessManager(this);
+    QNetworkReply* reply = nam->get(request);
+
+    connect(reply, &QNetworkReply::readyRead, this, [=]() {
+        QByteArray response_data = reply->readAll();
+        QJsonDocument json = QJsonDocument::fromJson(response_data);
+        auto remote_version = QVersionNumber::fromString(json[0]["name"].toString());
+        auto local_version = QVersionNumber::fromString(PROJECT_VERSION);
+        qDebug() << remote_version;
+        qDebug() << local_version;
+        if (QVersionNumber::compare(remote_version, local_version) > 0) {
+            QMessageBox msgBox;
+            msgBox.setText("Update found!");
+            msgBox.setInformativeText(QString("Local Version: %1\nRemote Version: %2\n\nVisit https://github.com/jimzrt/ChronoMod/releases/latest?").arg(local_version.toString()).arg(remote_version.toString()));
+            msgBox.setStandardButtons(QMessageBox::Open | QMessageBox::Discard);
+            msgBox.setDefaultButton(QMessageBox::Open);
+            int ret = msgBox.exec();
+            if (ret == QMessageBox::Open) {
+                QDesktopServices::openUrl(QUrl("https://github.com/jimzrt/ChronoMod/releases/latest"));
+            }
+        } else {
+            ui->statusbar->showMessage("Using latest version!");
+        }
+    });
 }
 
 void MainWindow::hidePreviews()
@@ -463,8 +502,13 @@ void MainWindow::extract_entries(const std::vector<ResourceEntry>& entries)
         }
 
         this->workerThread.doWork([=] {
-            emit this->workerThread.progressRangeChanged(0, entries.size());
-            int count = 0;
+            uint64_t current_progress = 0;
+            uint64_t totalSize = 0;
+            for (auto& entry : entries) {
+                totalSize += entry.entry_length;
+            }
+
+            emit this->workerThread.progressRangeChanged(0, totalSize);
             for (auto& entry : entries) {
 
                 QString finalPath = QDir(extract_dir).filePath(QString::fromStdString(entry.path));
@@ -482,7 +526,8 @@ void MainWindow::extract_entries(const std::vector<ResourceEntry>& entries)
                 file.open(QIODevice::WriteOnly);
                 file.write(ret.data(), ret.size());
                 file.close();
-                emit this->workerThread.progressValueChanged(++count);
+                current_progress += entry.entry_length;
+                emit this->workerThread.progressValueChanged(current_progress);
             }
         });
 
@@ -713,10 +758,12 @@ void MainWindow::on_actionSave_Patch_triggered()
 
 void MainWindow::resizePreviewImages()
 {
-    if (ui->imagePreview->isVisible())
+    if (ui->imagePreview->isVisible()) {
         ui->imagePreview->setPixmap(previewImage1.scaled(ui->groupBox->width() * 0.9, ui->groupBox->height() / 2 * 0.9, Qt::KeepAspectRatio, Qt::FastTransformation));
-    if (ui->imagePreview2->isVisible())
+    }
+    if (ui->imagePreview2->isVisible()) {
         ui->imagePreview2->setPixmap(previewImage2.scaled(ui->groupBox->width() * 0.9, ui->groupBox->height() / 2 * 0.9, Qt::KeepAspectRatio, Qt::FastTransformation));
+    }
 }
 
 void MainWindow::resizeEvent(QResizeEvent* event)

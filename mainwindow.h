@@ -73,6 +73,7 @@ private:
     void try_open_steambinaries();
     void resizePreviewImages();
     void replaceFont(ResourceEntry& fontEntry);
+    void checkUpdate();
     void resizeEvent(QResizeEvent* event) override;
 };
 #endif // MAINWINDOW_H
