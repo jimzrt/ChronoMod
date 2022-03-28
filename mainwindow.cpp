@@ -9,6 +9,7 @@
 #include "ui_mainwindow.h"
 #include <ChronoCrypto.h>
 #include <JlCompress.h>
+#include <QCloseEvent>
 #include <QDesktopServices>
 #include <QDirIterator>
 #include <QFileDialog>
@@ -75,7 +76,11 @@ MainWindow::MainWindow(QWidget* parent)
         if (!ui->treeView->selectionModel()->selectedIndexes().empty()) {
             ui->treeView->scrollTo(ui->treeView->selectionModel()->selectedIndexes()[0]);
         }
-        ui->resourceStatusLabel->setText(QString("%1 of %2 entries").arg(proxyModel->rowCount()).arg(model->rowCount()));
+        if (this->patchMap.empty()) {
+            ui->resourceStatusLabel->setText(QString("%1 of %2 entries").arg(proxyModel->rowCount()).arg(model->rowCount()));
+        } else {
+            ui->resourceStatusLabel->setText(QString("%1 of %2 entries (%3 modifications)").arg(proxyModel->rowCount()).arg(model->rowCount()).arg(this->patchMap.size()));
+        }
     });
 
     // worker thread for extracting and saving
@@ -303,11 +308,9 @@ MainWindow::MainWindow(QWidget* parent)
                 });
             }
 
-            QAction* unset_action = new QAction("Remove replacement", tableViewMenu);
-            unset_action->setEnabled(false);
-            tableViewMenu->addAction(unset_action);
             if (entry.hasReplacement) {
-                unset_action->setEnabled(true);
+                QAction* unset_action = new QAction("Remove replacement", tableViewMenu);
+                tableViewMenu->addAction(unset_action);
                 connect(unset_action, &QAction::triggered, this, [=] {
                     auto& entry = this->ressourceBin->getEntries()[entry_index];
 
@@ -375,6 +378,25 @@ void MainWindow::try_open_steambinaries()
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    if (this->patchMap.empty()) {
+        event->accept();
+        return;
+    }
+    QMessageBox::StandardButton resBtn = QMessageBox::question(this, PROJECT_NAME,
+        "Unsaved modifications!\nDo you want to save?",
+        QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+    if (resBtn == QMessageBox::Yes) {
+        event->ignore();
+        on_actionSave_triggered();
+    } else if (resBtn == QMessageBox::Cancel) {
+        event->ignore();
+    } else {
+        event->accept();
+    }
 }
 
 void MainWindow::checkUpdate()

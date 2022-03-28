@@ -79,5 +79,6 @@ private:
     void replaceFont(ResourceEntry& fontEntry);
     void checkUpdate();
     void resizeEvent(QResizeEvent* event) override;
+    void closeEvent(QCloseEvent* event) override;
 };
 #endif // MAINWINDOW_H
