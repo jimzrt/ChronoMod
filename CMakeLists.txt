@@ -5,6 +5,8 @@ project(ChronoMod VERSION "1.3.0" LANGUAGES CXX)
 configure_file(config.h.in config.h @ONLY)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
+set(APP_ICON_RESOURCE_WINDOWS "${CMAKE_CURRENT_SOURCE_DIR}/myappico.rc")
+
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set(CMAKE_AUTOMOC ON)
@@ -33,6 +35,7 @@ qt_add_executable(ChronoMod WIN32 MACOSX_BUNDLE
     resourceentry.h
     resourceentrymodel.cpp resourceentrymodel.h
     resourceentryproxymodel.cpp resourceentryproxymodel.h
+    ${APP_ICON_RESOURCE_WINDOWS}
 )
 
 target_compile_definitions(ChronoMod PUBLIC

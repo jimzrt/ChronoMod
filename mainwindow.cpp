@@ -393,7 +393,7 @@ void MainWindow::checkUpdate()
         auto local_version = QVersionNumber::fromString(PROJECT_VERSION);
         qDebug() << remote_version;
         qDebug() << local_version;
-        if (QVersionNumber::compare(remote_version, local_version) < 0) {
+        if (QVersionNumber::compare(remote_version, local_version) > 0) {
             ui->statusbar->showMessage("Update found!");
             int ret = QMessageBox::information(this, "Update found!", QString("Local Version: %1\nRemote Version: %2\n\nVisit https://github.com/jimzrt/ChronoMod/releases/latest?").arg(local_version.toString(), remote_version.toString()),
                 QMessageBox::Open | QMessageBox::Cancel);
