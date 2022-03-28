@@ -1,7 +1,7 @@
 # Generated from ChronoMod.pro.
 
 cmake_minimum_required(VERSION 3.16)
-project(ChronoMod VERSION "1.2.1" LANGUAGES CXX)
+project(ChronoMod VERSION "1.3.0" LANGUAGES CXX)
 configure_file(config.h.in config.h @ONLY)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 

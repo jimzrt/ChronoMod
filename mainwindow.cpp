@@ -53,8 +53,6 @@ MainWindow::MainWindow(QWidget* parent)
     hidePreviews();
     ui->progressBar->setHidden(true);
 
-    checkUpdate();
-
     // resize preview on splitter movement
     connect(ui->splitter, &QSplitter::splitterMoved, this, &MainWindow::resizePreviewImages);
 
@@ -114,6 +112,7 @@ MainWindow::MainWindow(QWidget* parent)
         ui->actionExtract_All->setEnabled(true);
         ui->actionLoad_Patch->setEnabled(true);
         ui->actionReplace_Font->setEnabled(true);
+        ui->actionApply_Defilter->setEnabled(true);
         ui->lineEdit->setEnabled(true);
         ui->lineEdit->setText("");
         ui->plainTextEdit->hide();
@@ -338,12 +337,12 @@ MainWindow::MainWindow(QWidget* parent)
     if (settings.value("ChronoTriggerExe").isValid() && settings.value("ResourceBin").isValid()) {
         if (QFile(settings.value("ChronoTriggerExe").toString()).exists() && QFile(settings.value("ResourceBin").toString()).exists()) {
             open_archives(settings.value("ChronoTriggerExe").toString(), settings.value("ResourceBin").toString());
-            return;
         }
+    } else {
+        // check steam folder for chrono paths
+        try_open_steambinaries();
     }
-
-    // check steam folder for chrono paths
-    try_open_steambinaries();
+    checkUpdate();
 }
 
 void MainWindow::try_open_steambinaries()
@@ -394,13 +393,10 @@ void MainWindow::checkUpdate()
         auto local_version = QVersionNumber::fromString(PROJECT_VERSION);
         qDebug() << remote_version;
         qDebug() << local_version;
-        if (QVersionNumber::compare(remote_version, local_version) > 0) {
-            QMessageBox msgBox;
-            msgBox.setText("Update found!");
-            msgBox.setInformativeText(QString("Local Version: %1\nRemote Version: %2\n\nVisit https://github.com/jimzrt/ChronoMod/releases/latest?").arg(local_version.toString()).arg(remote_version.toString()));
-            msgBox.setStandardButtons(QMessageBox::Open | QMessageBox::Discard);
-            msgBox.setDefaultButton(QMessageBox::Open);
-            int ret = msgBox.exec();
+        if (QVersionNumber::compare(remote_version, local_version) < 0) {
+            ui->statusbar->showMessage("Update found!");
+            int ret = QMessageBox::information(this, "Update found!", QString("Local Version: %1\nRemote Version: %2\n\nVisit https://github.com/jimzrt/ChronoMod/releases/latest?").arg(local_version.toString(), remote_version.toString()),
+                QMessageBox::Open | QMessageBox::Cancel);
             if (ret == QMessageBox::Open) {
                 QDesktopServices::openUrl(QUrl("https://github.com/jimzrt/ChronoMod/releases/latest"));
             }
@@ -769,4 +765,69 @@ void MainWindow::resizePreviewImages()
 void MainWindow::resizeEvent(QResizeEvent* event)
 {
     this->resizePreviewImages();
+}
+
+void MainWindow::on_actionApply_Defilter_triggered()
+{
+    QFileInfo chronoFile(settings.value("ChronoTriggerExe").toString());
+
+    QString fileName = QFileDialog::getOpenFileName(this, "Open libcocos2d.dll", chronoFile.absolutePath(), "DLL files (*.dll)");
+    qDebug() << fileName;
+    if (fileName.isEmpty()) {
+        return;
+    }
+    QFileInfo fileInfo(fileName);
+    if (fileInfo.fileName() != "libcocos2d.dll") {
+        int ret = QMessageBox::warning(this, "Filename missmatch",
+            "Filename should be libcocos2d.dll!\n"
+            "Continue anyway?",
+            QMessageBox::Yes | QMessageBox::No);
+        if (ret == QMessageBox::No) {
+            return;
+        }
+    }
+
+    QFile f(fileName);
+    if (!f.open(QFile::ReadWrite)) {
+        return;
+    }
+    QCryptographicHash hash(QCryptographicHash::Algorithm::Sha1);
+    hash.addData(&f);
+    auto base64 = hash.result().toBase64();
+    qDebug() << base64;
+    if (base64 == LIBCOCOS_BASE64_SHA1_MODIFIED) {
+        int ret = QMessageBox::information(this, "Revert?", "Patch already applied.\nRevert Patch?", QMessageBox::Yes | QMessageBox::No);
+        if (ret == QMessageBox::No) {
+            f.close();
+            return;
+        }
+        f.seek(LIBCOCOS_PATCH_LOCATION_1);
+        uint8_t patchValue1 = 1;
+        f.write(reinterpret_cast<const char*>(&patchValue1), sizeof(uint8_t));
+        f.seek(LIBCOCOS_PATCH_LOCATION_2);
+        uint8_t patchValue2 = 0;
+        f.write(reinterpret_cast<const char*>(&patchValue2), sizeof(uint8_t));
+        this->ui->statusbar->showMessage("Defilter patch reverted!");
+    } else {
+        if (base64 != LIBCOCOS_BASE64_SHA1) {
+            int ret = QMessageBox::warning(this, "Modified file", "libcocos2d.dll seems to be modified or updated.\nPatch anyway? (very low success)", QMessageBox::Yes | QMessageBox::No);
+            if (ret == QMessageBox::No) {
+                f.close();
+                return;
+            }
+        }
+        f.seek(LIBCOCOS_PATCH_LOCATION_1);
+        uint8_t patchValue1 = 0;
+        f.write(reinterpret_cast<const char*>(&patchValue1), sizeof(uint8_t));
+        f.seek(LIBCOCOS_PATCH_LOCATION_2);
+        uint8_t patchValue2 = 1;
+        f.write(reinterpret_cast<const char*>(&patchValue2), sizeof(uint8_t));
+        this->ui->statusbar->showMessage("Defilter patch applied!");
+    }
+    f.close();
+}
+
+void MainWindow::on_actionCheck_for_Updates_triggered()
+{
+    checkUpdate();
 }

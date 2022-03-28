@@ -52,6 +52,10 @@ private slots:
 
     void on_actionSave_Patch_triggered();
 
+    void on_actionApply_Defilter_triggered();
+
+    void on_actionCheck_for_Updates_triggered();
+
 private:
     Ui::MainWindow* ui;
     std::vector<uint32_t> decryption_key;
