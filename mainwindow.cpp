@@ -350,6 +350,8 @@ MainWindow::MainWindow(QWidget* parent)
 
 void MainWindow::try_open_steambinaries()
 {
+    // TODO: Detect on Linux, Mac?
+#ifdef _WIN32
     QSettings steam("HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Valve\\Steam", QSettings::Registry64Format);
     if (!steam.value("InstallPath").isValid()) {
         return;
@@ -373,6 +375,7 @@ void MainWindow::try_open_steambinaries()
             return;
         }
     }
+#endif // _WIN32
 }
 
 MainWindow::~MainWindow()
