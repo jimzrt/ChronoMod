@@ -129,6 +129,7 @@ MainWindow::MainWindow(QWidget* parent)
         model->setModelData(&entrty_list);
         ui->treeView->sortByColumn(0, Qt::AscendingOrder);
         this->setWindowTitle(QString("ChronoMod %1 - %2").arg(PROJECT_VERSION).arg(QString::fromStdString(this->ressourceBin->get_path())));
+         proxyModel->invalidate();
     });
 
     // preview selected  entry
@@ -632,6 +633,9 @@ void MainWindow::on_actionLoad_Patch_triggered()
 
 void MainWindow::reload()
 {
+    // clear patchmap
+    this->patchMap.clear();
+
     QString current_file = QString::fromStdString(this->ressourceBin->get_path());
     loadRessourceBin(current_file);
 }
@@ -824,10 +828,10 @@ void MainWindow::on_actionApply_Defilter_triggered()
             return;
         }
         f.seek(LIBCOCOS_PATCH_LOCATION_1);
-        uint8_t patchValue1 = 1;
+        uint8_t patchValue1 = 0x1;
         f.write(reinterpret_cast<const char*>(&patchValue1), sizeof(uint8_t));
         f.seek(LIBCOCOS_PATCH_LOCATION_2);
-        uint8_t patchValue2 = 0;
+        uint8_t patchValue2 = 0x75;
         f.write(reinterpret_cast<const char*>(&patchValue2), sizeof(uint8_t));
         this->ui->statusbar->showMessage("Defilter patch reverted!");
     } else {
@@ -839,10 +843,10 @@ void MainWindow::on_actionApply_Defilter_triggered()
             }
         }
         f.seek(LIBCOCOS_PATCH_LOCATION_1);
-        uint8_t patchValue1 = 0;
+        uint8_t patchValue1 = 0x0;
         f.write(reinterpret_cast<const char*>(&patchValue1), sizeof(uint8_t));
         f.seek(LIBCOCOS_PATCH_LOCATION_2);
-        uint8_t patchValue2 = 1;
+        uint8_t patchValue2 = 0xeb;
         f.write(reinterpret_cast<const char*>(&patchValue2), sizeof(uint8_t));
         this->ui->statusbar->showMessage("Defilter patch applied!");
     }
