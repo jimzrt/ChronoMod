@@ -1,9 +1,18 @@
-
 #include "resourcebin.h"
-#include <QtZlib/zlib.h>
+#include <zlib.h>
 #include <cstring>
 #include <mutex>
 #include <stdexcept>
+
+#ifndef NDEBUG
+#include <cassert>
+#endif // NDEBUG
+
+#ifdef _MSC_VER
+#define SWAP_ULONG _byteswap_ulong
+#else
+#define SWAP_ULONG __builtin_bswap32
+#endif // _MSC_VER
 
 ResourceBin::ResourceBin(const std::string& path)
     : path(path)
@@ -56,7 +65,7 @@ void ResourceBin::load_header()
     decode_input(offset_header, compressed_length_header, &header_buffer[0]);
 
     uncompressed_length_header = *(int32_t*)&header_buffer[0];
-    uncompressed_length_header = _byteswap_ulong(uncompressed_length_header);
+    uncompressed_length_header = SWAP_ULONG(uncompressed_length_header);
     std::vector<char> uncompressed_buffer(uncompressed_length_header);
     std::cout << "uncompressed length " << uncompressed_length_header << std::endl;
     int ret = gzip_uncompress(&header_buffer[4], header_buffer.size() - 4, &uncompressed_buffer[0], &uncompressed_length_header);
@@ -281,7 +290,7 @@ std::vector<char> ResourceBin::extract(const ResourceEntry& entry)
     if (entry_uncompressed_length == 0) {
         return {};
     }
-    entry_uncompressed_length = _byteswap_ulong(entry_uncompressed_length);
+    entry_uncompressed_length = SWAP_ULONG(entry_uncompressed_length);
     std::cout << "lenght " << entry.entry_length << ", uncompressed length: " << entry_uncompressed_length << std::endl;
     std::vector<char> entry_uncompressed(entry_uncompressed_length);
 
@@ -354,9 +363,11 @@ void ResourceBin::create_with_modifications(std::unordered_map<std::string, Patc
             uint32_t compressed_length = buffer.size();
             int ret = gzip_compress_inplace((unsigned char*)buffer.data() + 4, entry_length - 4, &compressed_length);
             //int ret = gzip_compress(buffer.data() + 4, entry_length - 4, tmp_buffer.data() + 4, &compressed_length);
+#ifndef NDEBUG
             assert(ret == 0);
+#endif // NDEBUG
             //buffer = std::move(tmp);
-            entry_length = _byteswap_ulong(entry_length - 4);
+            entry_length = SWAP_ULONG(entry_length - 4);
             memcpy(buffer.data(), &entry_length, 4);
 
             //encode it
@@ -394,7 +405,7 @@ void ResourceBin::create_with_modifications(std::unordered_map<std::string, Patc
         offset += path_length;
     }
     //std::vector<char> tmp(compressBound(new_header.size() * 1.5));
-    int32_t uncompressed_length_header_swapped = _byteswap_ulong(uncompressed_length_header);
+    int32_t uncompressed_length_header_swapped = SWAP_ULONG(uncompressed_length_header);
     memcpy(buffer.data(), &uncompressed_length_header_swapped, 4);
     unsigned int compressed_length = buffer.size();
     int ret = gzip_compress_inplace((unsigned char*)buffer.data() + 4, uncompressed_length_header, &compressed_length);
