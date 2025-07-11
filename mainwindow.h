@@ -6,6 +6,7 @@
 #include "resourcebin.h"
 #include "resourceentry.h"
 #include "resourceentrymodel.h"
+#include "VGMAudioPlayer.h"
 
 #include <QFutureWatcher>
 #include <QMainWindow>
@@ -73,8 +74,14 @@ private:
     void hidePreviews();
     void refreshSelection();
     QSettings settings;
-    ;
+    VGMAudioPlayer* audioPlayer;
+    bool m_seekerPressed;
+    
     void try_open_steambinaries();
+    void updateAudioPosition(qint64 position);
+    void updateAudioDuration(qint64 duration);
+    void updateAudioControls();
+    QString formatTime(qint64 milliseconds);
     void resizePreviewImages();
     void replaceFont(ResourceEntry& fontEntry);
     void checkUpdate();

@@ -35,7 +35,7 @@ bool ResourceEntryProxyModel::filterAcceptsRow(int source_row, const QModelIndex
     if (onlyModified && currentSearchString.isEmpty()) {
         return hasModification;
     }
-    bool containsSearchString = sourceModel()->index(source_row, 2, source_parent).data().toString().contains(currentSearchString);
+    bool containsSearchString = sourceModel()->index(source_row, 2, source_parent).data().toString().toLower().contains(currentSearchString.toLower());
     if (!onlyModified) {
         return containsSearchString;
     }

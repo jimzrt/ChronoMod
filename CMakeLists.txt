@@ -5,6 +5,11 @@ project(ChronoMod VERSION "1.4.0" LANGUAGES CXX)
 configure_file(config.h.in config.h @ONLY)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
+# Global settings to disable tests and examples for all dependencies
+set(BUILD_TESTING OFF CACHE INTERNAL "" FORCE)
+set(BUILD_EXAMPLES OFF CACHE INTERNAL "" FORCE)
+set(gtest_force_shared_crt ON CACHE INTERNAL "" FORCE)
+
 set(QUAZIP_QT_MAJOR_VERSION 6 CACHE STRING "Force QuaZip to use Qt6" FORCE)
 
 
@@ -26,6 +31,7 @@ find_package(Qt6 COMPONENTS Gui)
 find_package(Qt6 COMPONENTS Core5Compat)
 find_package(Qt6 COMPONENTS Widgets)
 find_package(Qt6 COMPONENTS Network)
+find_package(Qt6 COMPONENTS Multimedia)
 
 
 qt_add_executable(ChronoMod WIN32 MACOSX_BUNDLE
@@ -38,6 +44,7 @@ qt_add_executable(ChronoMod WIN32 MACOSX_BUNDLE
     resourceentry.h
     resourceentrymodel.cpp resourceentrymodel.h
     resourceentryproxymodel.cpp resourceentryproxymodel.h
+    VGMAudioPlayer.cpp VGMAudioPlayer.h
     ${APP_ICON_RESOURCE_WINDOWS}
 )
 
@@ -61,12 +68,36 @@ SET(QUAZIP_USE_QT_ZLIB OFF CACHE INTERNAL "" FORCE)
 set(ZLIB_COMPAT ON CACHE INTERNAL "" FORCE)
 set(ZLIB_ROOT "${CMAKE_SOURCE_DIR}/3rdparty/zlib" CACHE INTERNAL "" FORCE)
 set(ZLIB_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/3rdparty/zlib" CACHE INTERNAL "" FORCE)
+
+# Disable zlib tests and examples
+set(ZLIB_BUILD_EXAMPLES OFF CACHE INTERNAL "" FORCE)
+set(BUILD_TESTING OFF CACHE INTERNAL "" FORCE)
+
 add_subdirectory("3rdparty/zlib")
-
-
 
 add_subdirectory("3rdparty/quazip")
 
+# Add vgmstream - disable all unnecessary components
+set(BUILD_CLI OFF CACHE INTERNAL "" FORCE)
+set(BUILD_AUDACIOUS OFF CACHE INTERNAL "" FORCE)
+set(BUILD_V123 OFF CACHE INTERNAL "" FORCE)
+set(BUILD_STATIC ON CACHE INTERNAL "" FORCE)
+set(USE_MPEG OFF CACHE INTERNAL "" FORCE)
+set(USE_VORBIS OFF CACHE INTERNAL "" FORCE)
+set(USE_FFMPEG OFF CACHE INTERNAL "" FORCE)
+set(USE_G7221 OFF CACHE INTERNAL "" FORCE)
+set(USE_G719 OFF CACHE INTERNAL "" FORCE)
+set(USE_ATRAC9 OFF CACHE INTERNAL "" FORCE)
+set(USE_CELT OFF CACHE INTERNAL "" FORCE)
+set(USE_SPEEX OFF CACHE INTERNAL "" FORCE)
+set(BUILD_TESTING OFF CACHE INTERNAL "" FORCE)
+add_subdirectory("3rdparty/vgmstream")
+
+
+target_include_directories(ChronoMod PRIVATE
+    3rdparty/vgmstream/src
+    3rdparty/vgmstream/ext_includes
+)
 
 target_link_libraries(ChronoMod PUBLIC
     Qt::Core
@@ -74,8 +105,10 @@ target_link_libraries(ChronoMod PUBLIC
     Qt::Gui
     Qt::Widgets
     Qt::Network
+    Qt::Multimedia
     QuaZip::QuaZip
     zlib
+    libvgmstream
 )
 
 

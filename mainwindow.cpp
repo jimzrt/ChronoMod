@@ -7,6 +7,7 @@
 #include "resourceentrymodel.h"
 #include "resourceentryproxymodel.h"
 #include "ui_mainwindow.h"
+#include "VGMAudioPlayer.h"
 #include <ChronoCrypto.h>
 #include <JlCompress.h>
 #include <QCloseEvent>
@@ -35,6 +36,8 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , settings("ChronoMod.ini", QSettings::IniFormat)
+    , audioPlayer(new VGMAudioPlayer(this))
+    , m_seekerPressed(false)
 {
 
     // apply dark theme
@@ -53,6 +56,34 @@ MainWindow::MainWindow(QWidget* parent)
 
     hidePreviews();
     ui->progressBar->setHidden(true);
+    
+    // Connect audio player controls
+    connect(ui->audioPlayPauseButton, &QPushButton::clicked, this, [this]() {
+        if (audioPlayer->isPlaying()) {
+            audioPlayer->pause();
+        } else {
+            audioPlayer->play();
+        }
+    });
+    connect(ui->audioStopButton, &QPushButton::clicked, audioPlayer, &VGMAudioPlayer::stop);
+    
+    // Connect audio player signals
+    connect(audioPlayer, &VGMAudioPlayer::positionChanged, this, &MainWindow::updateAudioPosition);
+    connect(audioPlayer, &VGMAudioPlayer::durationChanged, this, &MainWindow::updateAudioDuration);
+    connect(audioPlayer, &VGMAudioPlayer::stateChanged, this, &MainWindow::updateAudioControls);
+    
+    // Connect seeker for seeking
+    connect(ui->audioSeeker, &QSlider::sliderPressed, this, [this]() {
+        m_seekerPressed = true;
+    });
+    connect(ui->audioSeeker, &QSlider::sliderReleased, this, [this]() {
+        if (audioPlayer->duration() > 0) {
+            // Calculate the target position based on slider value (0-1000)
+            qint64 targetPosition = (ui->audioSeeker->value() * audioPlayer->duration()) / 1000;
+            audioPlayer->seek(targetPosition);
+        }
+        m_seekerPressed = false;
+    });
 
     // resize preview on splitter movement
     connect(ui->splitter, &QSplitter::splitterMoved, this, &MainWindow::resizePreviewImages);
@@ -129,6 +160,7 @@ MainWindow::MainWindow(QWidget* parent)
         model->setModelData(&entrty_list);
         ui->treeView->sortByColumn(0, Qt::AscendingOrder);
         this->setWindowTitle(QString("ChronoMod %1 - %2").arg(PROJECT_VERSION).arg(QString::fromStdString(this->ressourceBin->get_path())));
+        this->setMinimumSize(1000, 600);
          proxyModel->invalidate();
     });
 
@@ -174,6 +206,39 @@ MainWindow::MainWindow(QWidget* parent)
                 patchFile.close();
                 ui->imagePreview2->setPixmap(previewImage2.scaled(ui->groupBox->width() * 0.9, ui->groupBox->height() / 2 * 0.9, Qt::KeepAspectRatio, Qt::FastTransformation));
                 ui->imagePreview2->show();
+            }
+            return;
+        }
+
+        if (fileName.endsWith(".sab")) {
+            auto data = this->ressourceBin->extract(entry);
+            
+            // Create a temporary file for vgmstream to read
+            QString tempFilePath = QDir(tempDir.path()).filePath(QString::fromStdString(entry.path));
+            QDir().mkpath(QFileInfo(tempFilePath).absolutePath());
+            
+            QFile tempFile(tempFilePath);
+            if (tempFile.open(QFile::WriteOnly)) {
+                tempFile.write(data.data(), data.size());
+                tempFile.close();
+                
+                // Try to load the audio file
+                bool success = audioPlayer->loadFile(tempFilePath);
+                hidePreviews();
+                
+                if (success) {
+                    // Show audio player interface
+                    ui->audioInfoLabel->setText(QString("🎵 %1\n\n%2")
+                                              .arg(QString::fromStdString(entry.path))
+                                              .arg(audioPlayer->formatInfo()));
+                    ui->audioPlayer->show();
+                } else {
+                    ui->imagePreview->setText("Unsupported audio format");
+                    ui->imagePreview->show();
+                }
+            } else {
+                ui->imagePreview->setText("Failed to create temporary file");
+                ui->imagePreview->show();
             }
             return;
         }
@@ -436,6 +501,12 @@ void MainWindow::hidePreviews()
     ui->imagePreview2->hide();
     ui->fontPreview->hide();
     ui->fontPreview2->hide();
+    ui->audioPlayer->hide();
+    
+    // Stop audio playback when hiding
+    if (audioPlayer) {
+        audioPlayer->stop();
+    }
 }
 
 void MainWindow::refreshSelection()
@@ -856,4 +927,51 @@ void MainWindow::on_actionApply_Defilter_triggered()
 void MainWindow::on_actionCheck_for_Updates_triggered()
 {
     checkUpdate();
+}
+
+void MainWindow::updateAudioPosition(qint64 position)
+{
+    if (!m_seekerPressed) {
+        if (audioPlayer->duration() > 0) {
+            ui->audioSeeker->setValue((position * 1000) / audioPlayer->duration());
+        }
+    }
+    
+    ui->audioTimeLabel->setText(QString("%1 / %2")
+                                .arg(formatTime(position))
+                                .arg(formatTime(audioPlayer->duration())));
+}
+
+void MainWindow::updateAudioDuration(qint64 duration)
+{
+    ui->audioSeeker->setRange(0, 1000); // 0-1000 for percentage
+    ui->audioTimeLabel->setText(QString("00:00 / %1").arg(formatTime(duration)));
+}
+
+void MainWindow::updateAudioControls()
+{
+    bool isPlaying = audioPlayer->isPlaying();
+    bool isPaused = audioPlayer->isPaused();
+    
+    // Update play/pause button text and state
+    if (isPlaying) {
+        ui->audioPlayPauseButton->setText("⏸");
+        ui->audioPlayPauseButton->setEnabled(true);
+    } else {
+        ui->audioPlayPauseButton->setText("▶");
+        ui->audioPlayPauseButton->setEnabled(true);
+    }
+    
+    ui->audioStopButton->setEnabled(isPlaying || isPaused);
+}
+
+QString MainWindow::formatTime(qint64 milliseconds)
+{
+    qint64 seconds = milliseconds / 1000;
+    qint64 minutes = seconds / 60;
+    seconds = seconds % 60;
+    
+    return QString("%1:%2")
+           .arg(minutes, 2, 10, QChar('0'))
+           .arg(seconds, 2, 10, QChar('0'));
 }
