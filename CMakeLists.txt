@@ -5,6 +5,9 @@ project(ChronoMod VERSION "1.4.0" LANGUAGES CXX)
 configure_file(config.h.in config.h @ONLY)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
+set(QUAZIP_QT_MAJOR_VERSION 6 CACHE STRING "Force QuaZip to use Qt6" FORCE)
+
+
 set(APP_ICON_RESOURCE_WINDOWS "${CMAKE_CURRENT_SOURCE_DIR}/myappico.rc")
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -58,7 +61,6 @@ SET(QUAZIP_USE_QT_ZLIB OFF CACHE INTERNAL "" FORCE)
 set(ZLIB_COMPAT ON CACHE INTERNAL "" FORCE)
 set(ZLIB_ROOT "${CMAKE_SOURCE_DIR}/3rdparty/zlib" CACHE INTERNAL "" FORCE)
 set(ZLIB_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/3rdparty/zlib" CACHE INTERNAL "" FORCE)
-set(ZLIB_LIBRARY "${PROJECT_BINARY_DIR}/3rdparty/zlib/libz.a" CACHE INTERNAL "" FORCE)
 add_subdirectory("3rdparty/zlib")
 
 
@@ -73,6 +75,7 @@ target_link_libraries(ChronoMod PUBLIC
     Qt::Widgets
     Qt::Network
     QuaZip::QuaZip
+    zlib
 )
 
 

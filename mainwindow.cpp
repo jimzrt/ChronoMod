@@ -68,7 +68,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     // filter entries
     connect(ui->lineEdit, &QLineEdit::textChanged, proxyModel, &ResourceEntryProxyModel::setCurrentSearchString);
-    connect(ui->checkBox, &QCheckBox::stateChanged, proxyModel, &ResourceEntryProxyModel::setOnlyModified);
+    connect(ui->checkBox, &QCheckBox::checkStateChanged, proxyModel, &ResourceEntryProxyModel::setOnlyModified);
     connect(proxyModel, &ResourceEntryProxyModel::layoutChanged, this, [=]() {
         qDebug() << "layout changed!";
 
@@ -351,7 +351,7 @@ MainWindow::MainWindow(QWidget* parent)
 
 void MainWindow::try_open_steambinaries()
 {
-    QSettings steam("HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Valve\\Steam", QSettings::Registry64Format);
+    QSettings steam("HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Valve\\Steam", QSettings::NativeFormat);
     if (!steam.value("InstallPath").isValid()) {
         return;
     }
